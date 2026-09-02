@@ -7,6 +7,10 @@ import { cookies } from "next/headers";
 import { serverConfig } from "@/config/server";
 import { LumenError } from "@/lib/errors";
 
+import type { Database } from "./types";
+
+export type LumenServerClient = SupabaseClient<Database>;
+
 function assertConfigured(): { url: string; anonKey: string } {
   const { url, anonKey } = serverConfig.supabase;
   if (!url || !anonKey) {
@@ -22,12 +26,13 @@ function assertConfigured(): { url: string; anonKey: string } {
 /**
  * Request-scoped Supabase client for Server Components, Route Handlers and
  * Server Actions. Reads/writes the Supabase auth cookies so sessions persist.
+ * Subject to RLS as the signed-in user.
  */
-export async function getSupabaseServerClient(): Promise<SupabaseClient> {
+export async function getSupabaseServerClient(): Promise<LumenServerClient> {
   const { url, anonKey } = assertConfigured();
   const cookieStore = await cookies();
 
-  return createServerClient(url, anonKey, {
+  return createServerClient<Database>(url, anonKey, {
     cookies: {
       getAll() {
         return cookieStore.getAll();
@@ -48,10 +53,11 @@ export async function getSupabaseServerClient(): Promise<SupabaseClient> {
 
 /**
  * Privileged client using the service-role key. Bypasses Row-Level Security —
- * use only in trusted server code (background jobs, admin tasks), never in a
- * path driven by unvalidated user input.
+ * use only in trusted server code (background jobs, admin tasks, tests), never
+ * in a path driven by unvalidated user input, and never import this from a
+ * client component (this module is `server-only`).
  */
-export function getSupabaseAdminClient(): SupabaseClient {
+export function getSupabaseAdminClient(): LumenServerClient {
   const { url } = assertConfigured();
   const serviceRoleKey = serverConfig.supabase.serviceRoleKey;
   if (!serviceRoleKey) {
@@ -61,7 +67,7 @@ export function getSupabaseAdminClient(): SupabaseClient {
       { recoverable: true },
     );
   }
-  return createServerClient(url, serviceRoleKey, {
+  return createServerClient<Database>(url, serviceRoleKey, {
     cookies: { getAll: () => [], setAll: () => {} },
   });
 }

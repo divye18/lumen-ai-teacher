@@ -4,16 +4,18 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { publicConfig } from "@/config/public";
 import { LumenError } from "@/lib/errors";
 
+import type { Database } from "./types";
+
 /**
  * Browser-side Supabase client. Uses only PUBLIC config (project URL + anon
- * key). Row-Level Security in the database is the real trust boundary.
- *
- * The full database schema is designed and migrated in the next phase; this is
- * the integration foundation only.
+ * key). Row-Level Security in the database is the real trust boundary — the
+ * service-role key is never available here.
  */
-let browserClient: SupabaseClient | null = null;
+export type LumenSupabaseClient = SupabaseClient<Database>;
 
-export function getSupabaseBrowserClient(): SupabaseClient {
+let browserClient: LumenSupabaseClient | null = null;
+
+export function getSupabaseBrowserClient(): LumenSupabaseClient {
   if (!publicConfig.supabase.url || !publicConfig.supabase.anonKey) {
     throw new LumenError(
       "CONFIG_MISSING",
@@ -21,7 +23,7 @@ export function getSupabaseBrowserClient(): SupabaseClient {
       { recoverable: true },
     );
   }
-  browserClient ??= createBrowserClient(
+  browserClient ??= createBrowserClient<Database>(
     publicConfig.supabase.url,
     publicConfig.supabase.anonKey,
   );
