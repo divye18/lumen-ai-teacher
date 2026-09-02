@@ -1,36 +1,154 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Lumen
 
-## Getting Started
+**Don't just get the answer. Understand it.**
 
-First, run the development server:
+Lumen is an adaptive AI teacher. It builds a model of what a student knows,
+detects misconceptions while they learn, and changes how it teaches until they
+understand.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+> **Status: foundation phase.** This repository currently contains the project
+> skeleton only — typed domain contracts, provider abstractions, configuration,
+> routing, and quality tooling. None of the teaching features are implemented
+> yet. See [Project status](#project-status).
+
+## Core architecture principle
+
+**AI decides _what_. Deterministic application code decides _how_.**
+
+- The AI/decision layer proposes a teaching action (explain, give an example,
+  ask a question, visualize, reteach, …).
+- Its output is coerced into a typed, schema-validated
+  [`TeachingDecision`](src/types/teaching.ts) before anything acts on it.
+- The deterministic lesson runtime turns a validated decision into what the
+  learner sees.
+- The frontend **never** independently decides teaching strategy, and raw LLM
+  output **never** directly controls frontend behaviour. Visual instructions
+  are declarative [`VisualDirective`](src/types/visuals.ts) values mapped to a
+  fixed catalogue of renderers.
+
+## Technology stack
+
+| Area                      | Choice                                                         |
+| ------------------------- | -------------------------------------------------------------- |
+| Framework                 | Next.js (App Router) + React + TypeScript (strict)             |
+| Styling                   | Tailwind CSS                                                   |
+| Animation                 | Framer Motion                                                  |
+| 3D                        | React Three Fiber + Three.js                                   |
+| Backend                   | Next.js route handlers / server components (modular monolith)  |
+| Database                  | Supabase PostgreSQL                                            |
+| Vector store              | Supabase pgvector                                              |
+| AI / Voice / TTS / Avatar | Provider abstraction layer — no vendor SDK in application code |
+| Validation                | Zod at every API and AI-output boundary                        |
+| Tests                     | Vitest                                                         |
+
+Deployment is intentionally left open for now.
+
+## Repository structure
+
+```
+src/
+  app/                     Routes (App Router)
+    page.tsx               "/"        — landing placeholder
+    setup/                 "/setup"   — placeholder
+    lesson/                "/lesson"  — placeholder
+    report/                "/report"  — placeholder
+    api/health/            "/api/health" — liveness + readiness JSON
+  components/               Shared UI (placeholder component for now)
+  config/
+    public.ts              Browser-safe config (NEXT_PUBLIC_*)
+    server.ts              Server-only config + secrets (guarded by `server-only`)
+  lib/
+    ai/                    LLMProvider / EmbeddingProvider interfaces + registry
+    db/                    Supabase browser + server clients
+    rag/                   Retriever interface (pgvector-backed, later)
+    teaching/              TeachingEngine boundary + decision validation
+    learner/               LearnerStateStore boundary
+    assessment/            AnswerEvaluator boundary + evaluation validation
+    visuals/               VisualDirective validation + safe fallback
+    voice/                 SpeechToText / TextToSpeech provider interfaces
+    avatar/                AvatarProvider interface
+    documents/             DocumentStore boundary
+    errors.ts             Explicit, coded, recoverable error types
+    result.ts             Result<T, E> helper
+  types/                    Domain contracts (Concept, Lesson, LearnerState, …)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Folders exist only where there is a concrete architectural purpose.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Local development
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Requires Node.js 20+.
 
-## Learn More
+```bash
+npm install
+cp .env.example .env.local   # then fill in values as needed
+npm run dev                  # http://localhost:3000
+```
 
-To learn more about Next.js, take a look at the following resources:
+The app runs without any external services configured. Supabase and AI
+providers are optional during the foundation phase; the relevant code paths
+report themselves as "not configured" rather than crashing.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Useful scripts
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npm run dev           # start the dev server
+npm run build         # production build
+npm run typecheck     # tsc --noEmit
+npm run lint          # eslint
+npm run test          # vitest run
+npm run format        # prettier --write .
+```
 
-## Deploy on Vercel
+Verify the app is up:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+curl http://localhost:3000/api/health
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Environment configuration
+
+All variables are documented in [`.env.example`](.env.example). Configuration
+is split by trust boundary:
+
+- **Public** (`NEXT_PUBLIC_*`) — inlined into the browser bundle. Validated by
+  [`src/config/public.ts`](src/config/public.ts).
+- **Server-only** — secrets (service-role key, provider API keys). Validated by
+  [`src/config/server.ts`](src/config/server.ts), which imports `server-only`
+  so it can never be bundled for the client.
+
+Never commit `.env.local` or real secrets.
+
+## Project status
+
+Implemented in this phase:
+
+- [x] Next.js + TypeScript (strict) + Tailwind project
+- [x] Typed domain contracts for the whole system
+- [x] `TeachingDecision` and `VisualDirective` schemas with validation
+- [x] Provider interfaces: LLM, embeddings, speech-to-text, text-to-speech, avatar
+- [x] Split public / server-only configuration
+- [x] Supabase browser + server client foundation
+- [x] Routes: `/`, `/setup`, `/lesson`, `/report`, `/api/health`
+- [x] ESLint, Prettier, Vitest
+
+**Not** implemented (later phases): document ingestion, RAG, the teaching
+decision engine, misconception detection, assessment logic, voice, avatar,
+3D scenes, dashboards, authentication UI, lesson UI, and the database schema
+and migrations.
+
+## Planned development phases
+
+1. **Foundation** _(this phase)_ — skeleton, contracts, tooling.
+2. **Data layer** — full Supabase schema + migrations, pgvector setup,
+   document storage, concrete `LearnerStateStore` / `DocumentStore`.
+3. **Ingestion & RAG** — document parsing, chunking, embeddings, retrieval.
+4. **Teaching engine** — the AI decision layer producing validated
+   `TeachingDecision`s; deterministic lesson runtime.
+5. **Assessment & misconceptions** — answer evaluation, misconception
+   detection and tracking.
+6. **Learning surface** — `/setup`, `/lesson`, `/report` UIs.
+7. **Visualization** — diagram / chart / code / 3D renderers mapped to
+   `VisualDirective`.
+8. **Voice & avatar** — concrete provider implementations behind the existing
+   interfaces.
