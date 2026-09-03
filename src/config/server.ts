@@ -48,7 +48,18 @@ const serverEnvSchema = z.object({
   AVATAR_API_KEY: z.string().min(1).optional(),
 });
 
-const parsed = serverEnvSchema.safeParse(process.env);
+/**
+ * Treat blank env vars (`FOO=`) as unset. `.env` files commonly leave keys
+ * present-but-empty; those should fall through to defaults / `optional()`
+ * rather than fail `.min(1)` and crash the app at import.
+ */
+const rawEnv: Record<string, string | undefined> = {};
+for (const [key, value] of Object.entries(process.env)) {
+  rawEnv[key] =
+    typeof value === "string" && value.trim() === "" ? undefined : value;
+}
+
+const parsed = serverEnvSchema.safeParse(rawEnv);
 
 if (!parsed.success) {
   throw new Error(

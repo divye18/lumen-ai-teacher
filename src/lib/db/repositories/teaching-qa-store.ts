@@ -41,6 +41,16 @@ export interface TeachingQaStore {
   listAnswersForSession(
     sessionId: string,
   ): Promise<Result<TeachingAnswerRow[]>>;
+  /** A user's most recent answers across all sessions (newest first). */
+  listRecentAnswersForUser(
+    userId: string,
+    limit?: number,
+  ): Promise<Result<TeachingAnswerRow[]>>;
+  /** A user's questions across all sessions (client-safe; newest first). */
+  listRecentQuestionsForUser(
+    userId: string,
+    limit?: number,
+  ): Promise<Result<ClientTeachingQuestion[]>>;
 }
 
 export function createTeachingQaStore(db: DbClient): TeachingQaStore {
@@ -126,6 +136,33 @@ export function createTeachingQaStore(db: DbClient): TeachingQaStore {
           .eq("session_id", id.value)
           .order("created_at", { ascending: true }),
       );
+    },
+
+    async listRecentAnswersForUser(userId, limit = 60) {
+      const id = parseInput(uuidSchema, userId);
+      if (!id.ok) return id;
+      return listResult(
+        await db
+          .from("teaching_answers")
+          .select("*")
+          .eq("user_id", id.value)
+          .order("created_at", { ascending: false })
+          .limit(limit),
+      );
+    },
+
+    async listRecentQuestionsForUser(userId, limit = 60) {
+      const id = parseInput(uuidSchema, userId);
+      if (!id.ok) return id;
+      const res = await db
+        .from("teaching_questions")
+        .select("*")
+        .eq("user_id", id.value)
+        .order("created_at", { ascending: false })
+        .limit(limit);
+      const list = listResult(res);
+      if (!list.ok) return list;
+      return ok(list.value.map(toClientQuestion));
     },
   };
 }

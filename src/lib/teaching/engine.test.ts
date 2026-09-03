@@ -41,6 +41,7 @@ function facts(over: Partial<PolicyFacts> = {}): PolicyFacts {
     triedStrategies: [],
     lastQuestionKind: null,
     conceptsRemaining: 2,
+    explanationsSinceQuestion: 0,
     ...over,
   };
 }

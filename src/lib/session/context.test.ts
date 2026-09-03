@@ -229,6 +229,34 @@ describe("buildPolicyFacts", () => {
     expect(f.activeMisconceptionCount).toBe(1);
   });
 
+  it("counts explanations delivered for the concept since its last question", () => {
+    const teach = (minutesAgo: number): InteractionRow => ({
+      id: `t000000-0000-0000-0000-00000000000${minutesAgo}`,
+      session_id: SESSION,
+      user_id: USER,
+      concept_id: CONCEPT_ID,
+      role: "TEACHER",
+      interaction_type: "EXPLANATION",
+      content: "here is the idea",
+      metadata: { conceptKey: "page-faults" },
+      created_at: new Date(Date.now() - minutesAgo * 60_000).toISOString(),
+    });
+    // No prior question → every explanation counts.
+    expect(
+      buildPolicyFacts(
+        data({
+          recentQuestions: [],
+          sessionInteractions: [teach(5), teach(4)],
+        }),
+      ).explanationsSinceQuestion,
+    ).toBe(2);
+    // Only explanations AFTER the most recent question (2 min ago) count.
+    expect(
+      buildPolicyFacts(data({ sessionInteractions: [teach(5), teach(1)] }))
+        .explanationsSinceQuestion,
+    ).toBe(1);
+  });
+
   it("reads tried strategies from persisted decisions", () => {
     const d = data({
       sessionInteractions: [

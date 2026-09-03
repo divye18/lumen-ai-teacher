@@ -68,6 +68,12 @@ export interface PolicyFacts {
   triedStrategies: TeachingStyle[];
   lastQuestionKind: QuestionKind | null;
   conceptsRemaining: number;
+  /**
+   * Teaching-content deliveries (EXPLAIN / RETEACH / RECAP / VISUAL) for the
+   * current concept since its most recent question. Used to break an
+   * explain-forever loop when the learner has not yet been assessed.
+   */
+  explanationsSinceQuestion: number;
 }
 
 export function nextQuestionKind(
@@ -132,14 +138,37 @@ export function baselineDecision(facts: PolicyFacts): ResolvedTeachingDecision {
       "Prioritising the next high-value concept.",
     );
   } else if (timeLow) {
-    action = facts.conceptImportance >= 4 ? "RECAP" : "MOVE_FORWARD";
+    // Consolidate a high-importance concept once, but always make forward
+    // progress after that so the session can actually wrap up.
+    const alreadyConsolidated = facts.explanationsSinceQuestion >= 1;
+    action =
+      facts.conceptImportance >= 4 && !alreadyConsolidated
+        ? "RECAP"
+        : "MOVE_FORWARD";
     reason =
-      "Time is low; consolidating the most important concept before wrapping up.";
+      action === "RECAP"
+        ? "Time is low; consolidating the most important concept before wrapping up."
+        : "Time is up — moving on to make the most of what's left.";
     narrative.push(
       "Session time is almost up.",
-      facts.conceptImportance >= 4
+      action === "RECAP"
         ? "This is a high-importance concept — doing a quick recap."
         : "Moving forward to cover remaining ground.",
+    );
+  } else if (
+    facts.explanationsSinceQuestion >= 1 &&
+    facts.masteryPoints < MASTERY_HIGH
+  ) {
+    // A teaching turn (explain / simplify / hint / reteach) just happened for
+    // this concept with no follow-up question. Check understanding to get a
+    // fresh signal instead of teaching into a void.
+    action = "ASK";
+    difficultyDirection = "SAME";
+    reason =
+      "The concept was just taught — checking understanding before deciding what to do next.";
+    narrative.push(
+      "A teaching turn just happened here.",
+      "Checking understanding to get a fresh signal.",
     );
   } else if (facts.lastClassification === "INCORRECT") {
     action = "HINT";
@@ -364,6 +393,29 @@ export function reconcileDecision(
     action = "ASSESS";
     difficultyDirection = "HARDER";
     narrative.push("Understanding improved — reassessing at a higher level.");
+  }
+
+  // 6. Break an explain-forever loop: if the concept has been explained
+  //    repeatedly and never assessed, check understanding instead.
+  const teachingActions = new Set([
+    "EXPLAIN",
+    "SIMPLIFY",
+    "RETEACH",
+    "HINT",
+    "EXAMPLE",
+    "ANALOGY",
+  ]);
+  if (
+    teachingActions.has(action) &&
+    facts.explanationsSinceQuestion >= 2 &&
+    facts.masteryPoints < MASTERY_HIGH
+  ) {
+    overrides.push(
+      "Concept taught repeatedly without a check — asking a question instead.",
+    );
+    action = "ASK";
+    nextAction = null;
+    narrative.push("Enough explanation — checking understanding now.");
   }
 
   // Guard the strategy value itself.

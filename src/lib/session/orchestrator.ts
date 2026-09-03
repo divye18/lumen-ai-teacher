@@ -127,6 +127,24 @@ export function createTeachingOrchestrator(
   const interactions = createInteractionStore(deps.db);
   const engine = createTeachingEngine({ llm: deps.llm });
 
+  /** Snapshot each lesson concept's current mastery (0–100) at session start. */
+  async function captureBaseline(
+    lessonId: string,
+  ): Promise<Record<string, number> | null> {
+    const conceptsRes = await lessons.listConcepts(lessonId);
+    if (!conceptsRes.ok) return null;
+    const masteryRes = await mastery.listForUser(deps.userId);
+    const byId = new Map(
+      (masteryRes.ok ? masteryRes.value : []).map((m) => [m.concept_id, m]),
+    );
+    const out: Record<string, number> = {};
+    for (const c of conceptsRes.value) {
+      const m = c.concept_id ? byId.get(c.concept_id) : undefined;
+      out[c.concept_key] = m ? scoreToPoints(m.mastery_score) : 0;
+    }
+    return out;
+  }
+
   function terminalStep(data: SessionContextData): TeachingStepView {
     return {
       sessionId: data.session.id,
@@ -399,6 +417,19 @@ export function createTeachingOrchestrator(
         if (res.value.user_id !== deps.userId) {
           return err(new SessionNotFoundError(input.sessionId));
         }
+        // Backfill the session-start mastery baseline for older sessions.
+        const snap =
+          (res.value.mastery_snapshot as Record<string, unknown> | null) ?? {};
+        if (!snap.__baseline && res.value.lesson_id) {
+          const baseline = await captureBaseline(res.value.lesson_id);
+          if (baseline) {
+            const updated = await sessions.updateTeaching({
+              id: res.value.id,
+              masterySnapshot: { ...snap, __baseline: baseline },
+            });
+            if (updated.ok) return buildSessionView(updated.value);
+          }
+        }
         return buildSessionView(res.value);
       }
 
@@ -440,6 +471,7 @@ export function createTeachingOrchestrator(
       if (!created.ok) return created;
 
       const now = new Date().toISOString();
+      const baseline = await captureBaseline(lesson.id);
       const withTeaching = await sessions.updateTeaching({
         id: created.value.id,
         lessonId: lesson.id,
@@ -448,7 +480,7 @@ export function createTeachingOrchestrator(
         timeBudgetMinutes:
           input.timeBudgetMinutes ?? lesson.estimated_minutes ?? null,
         startedAt: now,
-        masterySnapshot: {},
+        masterySnapshot: baseline ? { __baseline: baseline } : {},
       });
       if (!withTeaching.ok) return withTeaching;
 

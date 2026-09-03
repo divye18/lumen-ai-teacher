@@ -100,6 +100,37 @@ function streaks(recentAnswers: TeachingAnswerRow[]): {
   };
 }
 
+const TEACHING_CONTENT_TYPES = new Set([
+  "EXPLANATION",
+  "RETEACH",
+  "RECAP",
+  "VISUAL",
+  "HINT",
+]);
+
+/**
+ * Teaching-content deliveries for the current concept since its most recent
+ * question. Lets the policy move from EXPLAIN to ASK instead of re-explaining
+ * forever when the learner has not been assessed yet.
+ */
+function explanationsSinceQuestion(data: SessionContextData): number {
+  const conceptKey = data.currentConcept.concept_key;
+  const lastQuestionAt = data.recentQuestions
+    .filter((q) => q.concept_key === conceptKey)
+    .map((q) => Date.parse(q.created_at))
+    .filter((t) => Number.isFinite(t))
+    .sort((a, b) => a - b)
+    .pop();
+  const since = lastQuestionAt ?? 0;
+  return data.sessionInteractions.filter((i) => {
+    if (i.role !== "TEACHER") return false;
+    if (!TEACHING_CONTENT_TYPES.has(i.interaction_type)) return false;
+    const meta = i.metadata as Record<string, unknown> | null;
+    if (meta?.conceptKey !== conceptKey) return false;
+    return Date.parse(i.created_at) > since;
+  }).length;
+}
+
 function hintsRequested(data: SessionContextData): number {
   return data.sessionInteractions.filter(
     (i) =>
@@ -169,6 +200,7 @@ export function buildPolicyFacts(data: SessionContextData): PolicyFacts {
     lastQuestionKind:
       (lastQuestion?.question_kind as QuestionKind | null) ?? null,
     conceptsRemaining,
+    explanationsSinceQuestion: explanationsSinceQuestion(data),
   };
 }
 

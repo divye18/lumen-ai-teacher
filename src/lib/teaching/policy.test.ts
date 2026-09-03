@@ -29,6 +29,7 @@ function facts(over: Partial<PolicyFacts> = {}): PolicyFacts {
     triedStrategies: [],
     lastQuestionKind: null,
     conceptsRemaining: 2,
+    explanationsSinceQuestion: 0,
     ...over,
   };
 }
@@ -120,9 +121,32 @@ describe("baselineDecision (deterministic policy)", () => {
     );
     expect(d.action).toBe("MOVE_FORWARD");
   });
+
+  it("new concept, not yet explained → EXPLAIN", () => {
+    const d = baselineDecision(
+      facts({ masteryPoints: 0, attempts: 0, explanationsSinceQuestion: 0 }),
+    );
+    expect(d.action).toBe("EXPLAIN");
+  });
+
+  it("new concept already explained but never assessed → ASK (no explain loop)", () => {
+    const d = baselineDecision(
+      facts({ masteryPoints: 0, attempts: 0, explanationsSinceQuestion: 1 }),
+    );
+    expect(d.action).toBe("ASK");
+  });
 });
 
 describe("reconcileDecision (guardrails over the AI proposal)", () => {
+  it("stops an AI that re-explains an unassessed concept repeatedly", () => {
+    const d = reconcileDecision(
+      proposal({ action: "EXPLAIN" }),
+      facts({ attempts: 0, explanationsSinceQuestion: 2, masteryPoints: 20 }),
+    );
+    expect(d.action).toBe("ASK");
+    expect(d.source).toBe("ai+policy");
+  });
+
   it("keeps a sensible proposal unchanged (source = ai)", () => {
     const d = reconcileDecision(
       proposal({ action: "EXPLAIN" }),

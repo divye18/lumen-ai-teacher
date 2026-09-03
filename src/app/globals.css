@@ -1,26 +1,175 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ─────────────────────────────────────────────────────────────
+   Lumen design tokens.
+   Neutral-forward, one restrained accent, hairline borders.
+   Light + dark via a `.dark` class on <html> (see ThemeScript).
+   ───────────────────────────────────────────────────────────── */
+
+@theme {
+  --font-sans:
+    var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", monospace;
+
+  --radius-xs: 0.375rem;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+
+  --color-canvas: #fbfbfa;
+  --color-surface: #ffffff;
+  --color-surface-raised: #ffffff;
+  --color-subtle: #f3f3f1;
+  --color-ink: #191917;
+  --color-ink-muted: #6b6a67;
+  --color-ink-faint: #9c9a96;
+  --color-border: #e7e6e3;
+  --color-border-strong: #d6d5d1;
+
+  --color-accent: #5b4be6;
+  --color-accent-soft: #ece9fe;
+  --color-accent-contrast: #ffffff;
+
+  --color-band-unknown: #a1a09b;
+  --color-band-emerging: #c2620d;
+  --color-band-developing: #2563eb;
+  --color-band-proficient: #0d9488;
+  --color-band-strong: #16a34a;
+
+  --color-signal-advancing: #16a34a;
+  --color-signal-reinforcing: #5b4be6;
+  --color-signal-revisiting: #0891b2;
+  --color-signal-remediating: #c2620d;
+  --color-signal-challenging: #9333ea;
+
+  --color-positive: #16a34a;
+  --color-warning: #c2620d;
+  --color-danger: #dc2626;
+
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.04);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04);
+  --shadow-md:
+    0 4px 12px -2px rgb(0 0 0 / 0.08), 0 2px 6px -2px rgb(0 0 0 / 0.05);
+  --shadow-lg: 0 16px 48px -12px rgb(0 0 0 / 0.14);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+.dark {
+  --color-canvas: #0a0a0b;
+  --color-surface: #131315;
+  --color-surface-raised: #1a1a1d;
+  --color-subtle: #1c1c1f;
+  --color-ink: #ededec;
+  --color-ink-muted: #9b9a97;
+  --color-ink-faint: #6a6967;
+  --color-border: #262528;
+  --color-border-strong: #363539;
+
+  --color-accent: #8b7dff;
+  --color-accent-soft: #221f3d;
+  --color-accent-contrast: #0a0a0b;
+
+  --color-band-unknown: #7d7c78;
+  --color-band-emerging: #e08b3a;
+  --color-band-developing: #6a9bff;
+  --color-band-proficient: #3fcabc;
+  --color-band-strong: #4ade80;
+
+  --color-signal-advancing: #4ade80;
+  --color-signal-reinforcing: #9b8dff;
+  --color-signal-revisiting: #3bc9db;
+  --color-signal-remediating: #e08b3a;
+  --color-signal-challenging: #c084fc;
+
+  --color-positive: #4ade80;
+  --color-warning: #e08b3a;
+  --color-danger: #f87171;
+
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.4);
+  --shadow-md: 0 4px 16px -2px rgb(0 0 0 / 0.5);
+  --shadow-lg: 0 20px 56px -12px rgb(0 0 0 / 0.6);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html {
+    color-scheme: light dark;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background-color: color-mix(in oklab, var(--color-accent) 24%, transparent);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+.lumen-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-strong) transparent;
+}
+.lumen-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.lumen-scroll::-webkit-scrollbar-thumb {
+  background-color: var(--color-border-strong);
+  border-radius: 999px;
+}
+
+.text-balance {
+  text-wrap: balance;
+}
+
+@keyframes lumen-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
 }
