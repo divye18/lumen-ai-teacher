@@ -24,6 +24,11 @@ import { err, ok, type Result } from "@/lib/result";
 import { planLesson } from "./planner";
 import type { LessonPlan } from "@/lib/teaching/contracts";
 import type { TeachingCitation } from "@/lib/session/citations";
+import {
+  buildAndPersistGraph,
+  extractConcepts,
+  normalizeConceptTitle,
+} from "@/lib/graph";
 
 interface SourceContext {
   text: string;
@@ -127,9 +132,20 @@ export async function createLessonForUser(
   if (!planned.ok) return planned;
   const { plan, source, citations } = planned.value;
 
-  // Persist a concept row per plan concept, then the lesson, then lesson_concepts.
+  // Persist (or reuse) one concept row per plan concept. Concepts are
+  // de-duplicated per user by their stable normalized key so mastery and the
+  // knowledge graph accumulate across lessons on the same concept.
   const conceptIdByKey = new Map<string, string>();
   for (const c of plan.concepts) {
+    const normalizedKey = normalizeConceptTitle(c.title);
+    const existing = await concepts.findByNormalizedKey(
+      deps.userId,
+      normalizedKey,
+    );
+    if (existing.ok && existing.value) {
+      conceptIdByKey.set(c.key, existing.value.id);
+      continue;
+    }
     const created = await concepts.create({
       userId: deps.userId,
       documentId: input.documentId ?? null,
@@ -139,6 +155,7 @@ export async function createLessonForUser(
       metadata: { conceptKey: c.key, lessonTopic: input.topic },
     });
     if (!created.ok) return created;
+    await concepts.updateGraphFields(created.value.id, { normalizedKey });
     conceptIdByKey.set(c.key, created.value.id);
   }
 
@@ -179,6 +196,41 @@ export async function createLessonForUser(
         cause: conceptsRes.error,
       }),
     );
+  }
+
+  // Build the knowledge graph for this lesson's concepts. Best effort: a graph
+  // failure never blocks lesson creation (the teaching loop works without it).
+  try {
+    const prereqKeys = new Map<string, string[]>();
+    for (const c of plan.concepts) prereqKeys.set(c.key, c.prerequisites);
+    const extraction = await extractConcepts({
+      llm: deps.llm,
+      subject: input.topic,
+      language,
+      sources: sourceContext
+        ? sourceContext.citations.slice(0, 6).map((cite) => ({
+            text: cite.snippet ?? "",
+            page: cite.pageNumber ?? null,
+          }))
+        : [],
+      planConcepts: plan.concepts.map((c) => ({
+        key: c.key,
+        title: c.title,
+        summary: c.summary,
+        importance: clampInt(c.importance, 1, 5),
+        prerequisiteKeys: c.prerequisites,
+      })),
+    });
+    if (extraction.ok) {
+      await buildAndPersistGraph({
+        db: deps.db,
+        userId: deps.userId,
+        extraction: extraction.value.graph,
+        conceptIdByKey,
+      });
+    }
+  } catch {
+    // graph is an enhancement, not a dependency
   }
 
   return ok({

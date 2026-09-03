@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { LinkButton } from "@/components/ui/button";
 import { MasteryMeter } from "@/components/ui/mastery-meter";
 import { LumenMark } from "@/components/ui/lumen-mark";
+import { KnowledgeGraphPanel } from "@/components/graph/knowledge-graph-panel";
 import type { SessionReport } from "@/lib/studio/session-report";
 import { cn } from "@/lib/ui/cn";
 
@@ -111,12 +112,71 @@ export function SessionCompleteView({ report }: { report: SessionReport }) {
       ) : null}
 
       <Panel inset>
+        <p className="text-[11px] font-medium tracking-wide text-[var(--color-ink-faint)] uppercase">
+          What changed
+        </p>
+        <div className="mt-3 grid grid-cols-1 gap-x-6 gap-y-2 text-[13px] sm:grid-cols-3">
+          <p>
+            <span className="font-semibold tabular-nums">
+              {report.masteryGained > 0 ? `+${report.masteryGained}` : "0"}
+            </span>{" "}
+            <span className="text-[var(--color-ink-muted)]">
+              mastery points
+            </span>
+          </p>
+          <p>
+            <span className="font-semibold tabular-nums">
+              {report.conceptsReinforced}
+            </span>{" "}
+            <span className="text-[var(--color-ink-muted)]">
+              concept{report.conceptsReinforced === 1 ? "" : "s"} reinforced
+            </span>
+          </p>
+          <p>
+            <span className="text-[var(--color-ink-muted)]">
+              misconceptions
+            </span>{" "}
+            <span className="font-semibold tabular-nums">
+              {report.misconceptionsIdentified}
+            </span>
+            {report.misconceptionsRepeated > 0 ? (
+              <span className="text-[var(--color-warning)]">
+                {" "}
+                ({report.misconceptionsRepeated} repeated)
+              </span>
+            ) : null}
+          </p>
+        </div>
+      </Panel>
+
+      {report.graph.nodes.length > 1 ? (
+        <KnowledgeGraphPanel
+          graph={report.graph}
+          title="This lesson's knowledge map"
+        />
+      ) : null}
+
+      <Panel inset>
         <div className="flex items-center gap-2">
           <LumenMark className="size-4 text-[var(--color-accent)]" />
           <p className="text-[11px] font-medium tracking-wide text-[var(--color-ink-faint)] uppercase">
-            What Lumen learned about you
+            {report.learningPattern.length > 0
+              ? "Learning pattern"
+              : "What Lumen learned about you"}
           </p>
         </div>
+        {report.learningPattern.length > 0 ? (
+          <ul className="mt-4 flex flex-col gap-3">
+            {report.learningPattern.map((o) => (
+              <li key={o.id} className="text-[13px] leading-relaxed">
+                <p className="text-[var(--color-ink)]">{o.text}</p>
+                <p className="mt-0.5 text-[11px] text-[var(--color-ink-faint)]">
+                  {o.evidence}
+                </p>
+              </li>
+            ))}
+          </ul>
+        ) : null}
         <ul className="mt-4 flex flex-col gap-2.5">
           {report.insights.map((line, i) => (
             <motion.li
@@ -136,18 +196,23 @@ export function SessionCompleteView({ report }: { report: SessionReport }) {
       <div className="rounded-[var(--radius-lg)] border border-[color-mix(in_oklab,var(--color-accent)_25%,var(--color-border))] bg-[color-mix(in_oklab,var(--color-accent-soft)_55%,var(--color-surface))] p-5">
         <div className="flex items-center gap-2">
           <Badge tone="accent" dot>
-            Recommended next step
+            Next best move
           </Badge>
         </div>
         <h2 className="mt-3 text-[15px] font-semibold tracking-tight">
-          {report.recommendation.title}
+          {report.nextBestMove?.title ?? report.recommendation.title}
         </h2>
         <p className="mt-1 text-[13px] leading-relaxed text-[var(--color-ink-muted)]">
-          {report.recommendation.reason}
+          {report.nextBestMove?.reason ?? report.recommendation.reason}
         </p>
         <div className="mt-4 flex flex-wrap gap-3">
-          <LinkButton href={report.recommendation.href} size="lg">
-            {report.recommendation.ctaLabel}
+          <LinkButton
+            href={report.nextBestMove?.href ?? report.recommendation.href}
+            size="lg"
+          >
+            {report.nextBestMove
+              ? "Plan this next"
+              : report.recommendation.ctaLabel}
           </LinkButton>
           <LinkButton href="/studio" variant="secondary" size="lg">
             Back to studio

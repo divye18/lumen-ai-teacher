@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   createDocumentStore,
+  createInteractionStore,
   createLessonStore,
   createMasteryStore,
   createSessionStore,
@@ -11,9 +12,12 @@ import {
   type TeachingAnswerRow,
 } from "@/lib/db/repositories";
 import { masteryBandLabel, scoreToPoints } from "@/lib/teaching/mastery";
+import { buildStrategyMemory } from "@/lib/learner";
+import { getKnowledgeGraph, type KnowledgeGraphView } from "@/lib/graph";
 import { SessionNotFoundError } from "@/lib/errors";
 import { err, ok, type Result } from "@/lib/result";
 
+import { buildObservations, type Observation } from "./observations";
 import { buildRecommendation, type RecommendationView } from "./recommendation";
 
 export interface ConceptOutcome {
@@ -44,6 +48,20 @@ export interface SessionReport {
   outcomes: ConceptOutcome[];
   insights: string[];
   recommendation: RecommendationView;
+  /** Total mastery points gained across strengthened concepts. */
+  masteryGained: number;
+  /** Concepts whose mastery moved up this session. */
+  conceptsReinforced: number;
+  /** Evidence-backed learning-pattern observations for this session. */
+  learningPattern: Observation[];
+  /** Graph-aware recommended next concept. */
+  nextBestMove: {
+    title: string;
+    reason: string;
+    href: string;
+  } | null;
+  /** The lesson's knowledge graph with current learner state. */
+  graph: KnowledgeGraphView;
 }
 
 function jsonNum(v: unknown): number | null {
@@ -60,6 +78,7 @@ export async function getSessionReport(
   const qa = createTeachingQaStore(db);
   const mastery = createMasteryStore(db);
   const documents = createDocumentStore(db);
+  const interactions = createInteractionStore(db);
 
   const sessionRes = await sessions.get(sessionId);
   if (!sessionRes.ok) return sessionRes;
@@ -164,7 +183,87 @@ export async function getSessionReport(
     repeated: repeatedFromSnapshot,
   });
 
-  const docRes = await documents.listForUser(userId);
+  const [docRes, interactionsRes, graphRes] = await Promise.all([
+    documents.listForUser(userId),
+    interactions.listForSession(sessionId, { limit: 200 }),
+    getKnowledgeGraph(db, userId, { lessonId: session.lesson_id }),
+  ]);
+
+  const emptyGraph: KnowledgeGraphView = {
+    scope: "lesson",
+    nodes: [],
+    edges: [],
+    layerCount: 0,
+    stats: {
+      nodeCount: 0,
+      edgeCount: 0,
+      assessedCount: 0,
+      misconceptionCount: 0,
+      prerequisiteEdges: 0,
+      averageMastery: null,
+    },
+    generatedAt: new Date().toISOString(),
+  };
+  const graph = graphRes.ok ? graphRes.value : emptyGraph;
+
+  const strategyMemory = buildStrategyMemory({
+    interactions: interactionsRes.ok ? interactionsRes.value : [],
+    answers,
+    questions,
+  });
+  const learningPattern = buildObservations({
+    answers,
+    questions,
+    concepts: outcomes.map((o) => ({
+      conceptKey: o.key,
+      title: o.title,
+      lessonId: session.lesson_id ?? "",
+      lessonTitle: lesson?.title ?? "",
+      masteryPoints: o.masteryAfter,
+      band: o.band,
+      bandId: "",
+      confidence: 0,
+      attempts: 1,
+      misconceptionCount: 0,
+      status: "COMPLETED",
+      assessed: true,
+      lastSeenAt: null,
+    })),
+    strategyMemory,
+    graph,
+  });
+
+  const masteryGained = outcomes
+    .filter((o) => o.delta > 0)
+    .reduce((s, o) => s + o.delta, 0);
+  const conceptsReinforced = outcomes.filter((o) => o.delta > 0).length;
+
+  // Graph-aware next best move: the weakest node that the most other concepts
+  // depend on, else the lowest-mastery assessed concept.
+  const dependentCounts = new Map<string, number>();
+  for (const e of graph.edges) {
+    if (e.type !== "PREREQUISITE") continue;
+    dependentCounts.set(e.source, (dependentCounts.get(e.source) ?? 0) + 1);
+  }
+  const candidate = [...graph.nodes]
+    .filter((n) => n.masteryPoints < 71)
+    .sort((a, b) => {
+      const da = dependentCounts.get(a.id) ?? 0;
+      const db2 = dependentCounts.get(b.id) ?? 0;
+      if (da !== db2) return db2 - da;
+      return a.masteryPoints - b.masteryPoints;
+    })[0];
+  const nextBestMove = candidate
+    ? {
+        title: candidate.title,
+        reason:
+          (dependentCounts.get(candidate.id) ?? 0) > 0
+            ? `${candidate.title} supports other concepts and is at ${candidate.masteryPoints}/100 — reinforcing it unlocks the most.`
+            : `${candidate.title} is your lowest point at ${candidate.masteryPoints}/100 — a focused pass will lift it.`,
+        href: `/studio/plan?topic=${encodeURIComponent(candidate.title)}`,
+      }
+    : null;
+
   const recommendation = buildRecommendation({
     activeSession: null,
     concepts: outcomes.map((o) => ({
@@ -208,6 +307,11 @@ export async function getSessionReport(
     outcomes,
     insights,
     recommendation,
+    masteryGained: Math.round(masteryGained),
+    conceptsReinforced,
+    learningPattern,
+    nextBestMove,
+    graph,
   });
 }
 

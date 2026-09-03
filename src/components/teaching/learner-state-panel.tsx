@@ -6,6 +6,8 @@ import {
   SessionTimeline,
   type TimelineConcept,
 } from "@/components/learning/session-timeline";
+import { LessonPathStrip } from "@/components/graph/lesson-path-strip";
+import type { KnowledgeGraphView } from "@/lib/graph";
 import type { DecisionView } from "@/lib/session/views";
 import {
   actionLabel,
@@ -27,16 +29,25 @@ export function LearnerStatePanel({
   concepts,
   currentIndex,
   approachTrail,
+  graph,
+  currentConceptKey,
 }: {
   snapshot: LearnerStateSnapshot;
   decision: DecisionView | null;
   concepts: TimelineConcept[];
   currentIndex: number;
   approachTrail: string[];
+  graph?: KnowledgeGraphView | null;
+  currentConceptKey?: string | null;
 }) {
   const signal: LearningSignalPresentation | null = decision
     ? signalForDecision(decision)
     : null;
+  const reinforcing = decision
+    ? decision.adaptationNarrative.some((n) =>
+        /build (directly )?on|supports later|reinforc|solid before/i.test(n),
+      )
+    : false;
 
   return (
     <div className="flex flex-col gap-5">
@@ -77,12 +88,19 @@ export function LearnerStatePanel({
       {signal ? <LearningSignal signal={signal} /> : null}
 
       {concepts.length > 0 ? (
-        <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+        <div className="flex flex-col gap-3 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
           <SessionTimeline
             concepts={concepts}
             currentIndex={currentIndex}
             approachTrail={approachTrail}
           />
+          {graph ? (
+            <LessonPathStrip
+              graph={graph}
+              currentConceptKey={currentConceptKey ?? null}
+              reinforcing={reinforcing}
+            />
+          ) : null}
         </div>
       ) : null}
     </div>

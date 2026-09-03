@@ -3,10 +3,11 @@ import { redirect } from "next/navigation";
 
 import { ContinueLearning } from "@/components/dashboard/continue-learning";
 import { EmptyStudio } from "@/components/dashboard/empty-studio";
-import { KnowledgeMap } from "@/components/dashboard/knowledge-map";
+import { LearningLens } from "@/components/dashboard/learning-lens";
 import { LearningMomentum } from "@/components/dashboard/learning-momentum";
 import { MisconceptionRadar } from "@/components/dashboard/misconception-radar";
 import { RecommendedAction } from "@/components/dashboard/recommended-action";
+import { KnowledgeGraphPanel } from "@/components/graph/knowledge-graph-panel";
 import { getLLMProviderFromConfig } from "@/lib/ai/llm";
 import { requireUser } from "@/lib/auth/current-user";
 import { getSupabaseServerClient } from "@/lib/db/server";
@@ -50,7 +51,9 @@ export default async function StudioPage() {
         <ContinueLearning session={overview.activeSession} />
       ) : null}
 
-      <KnowledgeMap concepts={overview.concepts} />
+      <KnowledgeGraphPanel graph={overview.graph} />
+
+      <LearningLens observations={overview.observations} />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <MisconceptionRadar misconceptions={overview.misconceptions} />

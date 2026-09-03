@@ -16,8 +16,11 @@ import {
   masteryBandLabel,
   scoreToPoints,
 } from "@/lib/teaching/mastery";
+import { buildStrategyMemory } from "@/lib/learner";
+import { getKnowledgeGraph, type KnowledgeGraphView } from "@/lib/graph";
 
 import { buildMomentum, type MomentumView } from "./momentum";
+import { buildObservations, type Observation } from "./observations";
 import { buildRecommendation, type RecommendationView } from "./recommendation";
 
 export interface ConceptNode {
@@ -85,6 +88,10 @@ export interface StudioOverview {
   documents: DocumentSummary[];
   lessonCount: number;
   llmConfigured: boolean;
+  /** The learner-aware knowledge graph across every lesson. */
+  graph: KnowledgeGraphView;
+  /** Evidence-backed "how Lumen sees your learning" observations. */
+  observations: Observation[];
 }
 
 function jsonNumber(v: unknown): number | null {
@@ -262,6 +269,38 @@ export async function getStudioOverview(
     conceptCount: concepts.length,
   });
 
+  const graphRes = await getKnowledgeGraph(db, userId);
+  const graph: KnowledgeGraphView = graphRes.ok
+    ? graphRes.value
+    : {
+        scope: "all",
+        nodes: [],
+        edges: [],
+        layerCount: 0,
+        stats: {
+          nodeCount: 0,
+          edgeCount: 0,
+          assessedCount: 0,
+          misconceptionCount: 0,
+          prerequisiteEdges: 0,
+          averageMastery: null,
+        },
+        generatedAt: new Date().toISOString(),
+      };
+
+  const strategyMemory = buildStrategyMemory({
+    interactions: recentInteractions,
+    answers: recentAnswers,
+    questions: recentQuestions,
+  });
+  const observations = buildObservations({
+    answers: recentAnswers,
+    questions: recentQuestions,
+    concepts,
+    strategyMemory,
+    graph,
+  });
+
   const recommendation = buildRecommendation({
     activeSession,
     concepts,
@@ -300,5 +339,7 @@ export async function getStudioOverview(
     documents: documentSummaries,
     lessonCount: lessonRows.length,
     llmConfigured: options.llmConfigured,
+    graph,
+    observations,
   };
 }

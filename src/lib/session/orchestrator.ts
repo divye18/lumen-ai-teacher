@@ -36,6 +36,7 @@ import {
   type ResolvedTeachingDecision,
 } from "@/lib/teaching";
 import { lessonPlanSchema, type LessonPlan } from "@/lib/teaching/contracts";
+import { getKnowledgeGraph, graphSignalFromView } from "@/lib/graph";
 
 import {
   buildEngineConcept,
@@ -303,6 +304,22 @@ export function createTeachingOrchestrator(
     const previousMasteryPoints =
       snapEntry?.previousMasteryPoints ?? currentPoints;
 
+    // Graph awareness — best effort. Never blocks the teaching loop.
+    let graphSignal: SessionContextData["graphSignal"];
+    try {
+      const graphRes = await getKnowledgeGraph(deps.db, deps.userId, {
+        lessonId: lesson.id,
+      });
+      if (graphRes.ok && graphRes.value.edges.length > 0) {
+        graphSignal = graphSignalFromView(
+          graphRes.value,
+          currentConcept.concept_key,
+        );
+      }
+    } catch {
+      graphSignal = undefined;
+    }
+
     const data: SessionContextData = {
       session,
       lesson,
@@ -315,6 +332,7 @@ export function createTeachingOrchestrator(
       recentQuestions,
       sessionInteractions,
       timeElapsedMinutes,
+      graphSignal,
     };
 
     return ok({ data, plan, currentConceptId });

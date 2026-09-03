@@ -39,10 +39,19 @@ export const CONCEPT_RELATIONSHIP_TYPES = [
   "RELATED",
   "PART_OF",
   "DEPENDS_ON",
+  "CONTRASTS_WITH",
 ] as const;
 export type ConceptRelationshipType =
   (typeof CONCEPT_RELATIONSHIP_TYPES)[number];
 export const conceptRelationshipTypeSchema = z.enum(CONCEPT_RELATIONSHIP_TYPES);
+
+/**
+ * PREREQUISITE / DEPENDS_ON / PART_OF are asymmetric (source → target).
+ * RELATED / CONTRASTS_WITH are symmetric — canonicalised (source id < target
+ * id) before persistence so the pair is stored once.
+ */
+export const SYMMETRIC_RELATIONSHIP_TYPES: readonly ConceptRelationshipType[] =
+  ["RELATED", "CONTRASTS_WITH"];
 
 export const SESSION_STATUSES = [
   "PLANNED",

@@ -16,6 +16,7 @@ import {
 } from "@/lib/db/enums";
 import type { PolicyFacts } from "@/lib/teaching/policy";
 import { scoreToPoints } from "@/lib/teaching/mastery";
+import type { GraphTeachingSignal } from "@/lib/graph";
 import type {
   EngineConceptContext,
   EngineSignalContext,
@@ -36,6 +37,12 @@ export interface SessionContextData {
   recentQuestions: ClientTeachingQuestion[];
   sessionInteractions: InteractionRow[];
   timeElapsedMinutes: number;
+  /**
+   * Knowledge-graph position of the current concept. Optional and best-effort —
+   * absent (or all-false) when the graph is unavailable; the policy then simply
+   * ignores prerequisite awareness.
+   */
+  graphSignal?: GraphTeachingSignal;
 }
 
 function asStrategy(value: string | null | undefined): TeachingStyle | null {
@@ -201,6 +208,10 @@ export function buildPolicyFacts(data: SessionContextData): PolicyFacts {
       (lastQuestion?.question_kind as QuestionKind | null) ?? null,
     conceptsRemaining,
     explanationsSinceQuestion: explanationsSinceQuestion(data),
+    currentConceptIsLoadBearing:
+      data.graphSignal?.currentConceptIsLoadBearing ?? false,
+    weakUpstreamPrerequisite:
+      data.graphSignal?.weakUpstreamPrerequisite ?? null,
   };
 }
 

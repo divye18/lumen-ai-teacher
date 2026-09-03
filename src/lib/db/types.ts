@@ -188,6 +188,11 @@ export interface Database {
           metadata: Json;
           created_at: Timestamptz;
           updated_at: Timestamptz;
+          // Phase 4 — knowledge graph
+          normalized_key: string | null;
+          importance_score: number;
+          source_pages: Json;
+          graph_degree: number;
         };
         Insert: {
           id?: Uuid;
@@ -199,6 +204,10 @@ export interface Database {
           metadata?: Json;
           created_at?: Timestamptz;
           updated_at?: Timestamptz;
+          normalized_key?: string | null;
+          importance_score?: number;
+          source_pages?: Json;
+          graph_degree?: number;
         };
         Update: {
           id?: Uuid;
@@ -210,6 +219,10 @@ export interface Database {
           metadata?: Json;
           created_at?: Timestamptz;
           updated_at?: Timestamptz;
+          normalized_key?: string | null;
+          importance_score?: number;
+          source_pages?: Json;
+          graph_degree?: number;
         };
         Relationships: [];
       };

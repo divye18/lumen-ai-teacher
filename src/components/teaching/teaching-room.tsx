@@ -17,6 +17,7 @@ import { ErrorState, InlineSpinner } from "@/components/ui/states";
 import { LumenWordmark } from "@/components/ui/lumen-mark";
 import { ThemeToggle } from "@/components/ui/theme";
 import type { TimelineConcept } from "@/components/learning/session-timeline";
+import type { KnowledgeGraphView } from "@/lib/graph";
 import { apiFetch } from "@/lib/ui/api-client";
 import { actionLabel } from "@/lib/ui/learning-presentation";
 import type {
@@ -51,10 +52,12 @@ export function TeachingRoom({
   sessionId,
   initialSession,
   concepts: initialConcepts,
+  graph = null,
 }: {
   sessionId: string;
   initialSession: SessionView;
   concepts: TimelineConcept[];
+  graph?: KnowledgeGraphView | null;
 }) {
   const reduce = useReducedMotion();
 
@@ -361,6 +364,8 @@ export function TeachingRoom({
             concepts={concepts}
             currentIndex={currentIndex}
             approachTrail={approachTrail}
+            graph={graph}
+            currentConceptKey={currentConceptKey}
           />
         </aside>
       </div>

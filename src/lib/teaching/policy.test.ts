@@ -30,6 +30,8 @@ function facts(over: Partial<PolicyFacts> = {}): PolicyFacts {
     lastQuestionKind: null,
     conceptsRemaining: 2,
     explanationsSinceQuestion: 0,
+    currentConceptIsLoadBearing: false,
+    weakUpstreamPrerequisite: null,
     ...over,
   };
 }
@@ -135,6 +137,39 @@ describe("baselineDecision (deterministic policy)", () => {
     );
     expect(d.action).toBe("ASK");
   });
+
+  it("graph-aware: a load-bearing concept is not hardened on 'developing' mastery", () => {
+    const improved = {
+      masteryPoints: 64,
+      previousMasteryPoints: 52,
+      attempts: 3,
+      lastClassification: null,
+      explanationsSinceQuestion: 0,
+    } as const;
+    // Without graph context, an improvement at this level → reassess harder.
+    expect(baselineDecision(facts(improved)).action).toBe("ASSESS");
+    // Load-bearing → hold difficulty and check once more instead.
+    const d = baselineDecision(
+      facts({ ...improved, currentConceptIsLoadBearing: true }),
+    );
+    expect(d.action).toBe("ASK");
+    expect(d.difficultyDirection).not.toBe("HARDER");
+    expect(d.adaptationNarrative.join(" ")).toMatch(/build|solid/i);
+  });
+
+  it("graph-aware: a weak upstream prerequisite is named in the narrative", () => {
+    const d = baselineDecision(
+      facts({
+        masteryPoints: 40,
+        attempts: 1,
+        weakUpstreamPrerequisite: {
+          title: "Virtual Memory",
+          masteryPoints: 35,
+        },
+      }),
+    );
+    expect(d.adaptationNarrative.join(" ")).toMatch(/Virtual Memory/);
+  });
 });
 
 describe("reconcileDecision (guardrails over the AI proposal)", () => {
@@ -145,6 +180,20 @@ describe("reconcileDecision (guardrails over the AI proposal)", () => {
     );
     expect(d.action).toBe("ASK");
     expect(d.source).toBe("ai+policy");
+  });
+
+  it("graph-aware: blocks MOVE_FORWARD past a load-bearing concept below high mastery", () => {
+    const d = reconcileDecision(
+      proposal({ action: "MOVE_FORWARD", nextAction: null }),
+      facts({
+        masteryPoints: 64,
+        incorrectStreak: 0,
+        lastClassification: "CORRECT",
+        currentConceptIsLoadBearing: true,
+      }),
+    );
+    expect(d.action).toBe("ASK");
+    expect(d.overrides.join(" ")).toMatch(/supports later material/i);
   });
 
   it("keeps a sensible proposal unchanged (source = ai)", () => {

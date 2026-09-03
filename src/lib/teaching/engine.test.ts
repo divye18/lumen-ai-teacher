@@ -42,6 +42,8 @@ function facts(over: Partial<PolicyFacts> = {}): PolicyFacts {
     lastQuestionKind: null,
     conceptsRemaining: 2,
     explanationsSinceQuestion: 0,
+    currentConceptIsLoadBearing: false,
+    weakUpstreamPrerequisite: null,
     ...over,
   };
 }

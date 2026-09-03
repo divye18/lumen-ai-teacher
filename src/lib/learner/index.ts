@@ -59,6 +59,11 @@ export interface LearnerStateStore {
 export { assembleLearnerState, type LearnerStateBundle } from "./assemble";
 export { createSupabaseLearnerStateStore } from "./supabase-store";
 export {
+  buildStrategyMemory,
+  type StrategyMemory,
+  type StrategyOutcome,
+} from "./strategy-memory";
+export {
   applyInteractionOutcome,
   type InteractionOutcome,
   type InteractionOutcomeInput,

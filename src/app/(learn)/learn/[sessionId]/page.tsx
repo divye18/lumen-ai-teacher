@@ -43,6 +43,7 @@ export default async function LearnPage({
       sessionId={sessionId}
       initialSession={data.value.session}
       concepts={data.value.concepts}
+      graph={data.value.graph}
     />
   );
 }

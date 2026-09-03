@@ -74,6 +74,14 @@ export interface PolicyFacts {
    * explain-forever loop when the learner has not yet been assessed.
    */
   explanationsSinceQuestion: number;
+  /**
+   * Knowledge-graph awareness (Phase 4). `currentConceptIsLoadBearing` = later
+   * concepts build directly on this one, so "developing" mastery is not good
+   * enough to advance. `weakUpstreamPrerequisite` = an already-taught
+   * prerequisite that is still weak and should be reinforced.
+   */
+  currentConceptIsLoadBearing: boolean;
+  weakUpstreamPrerequisite: { title: string; masteryPoints: number } | null;
 }
 
 export function nextQuestionKind(
@@ -191,6 +199,22 @@ export function baselineDecision(facts: PolicyFacts): ResolvedTeachingDecision {
       "Answer was partially correct.",
       "Targeting the specific missing piece.",
     );
+  } else if (
+    facts.currentConceptIsLoadBearing &&
+    facts.masteryPoints >= MASTERY_MEDIUM &&
+    facts.masteryPoints < MASTERY_HIGH &&
+    facts.lastClassification !== "CORRECT"
+  ) {
+    // Graph-aware: later concepts build directly on this one, so "developing"
+    // is not solid enough to move on — check understanding once more.
+    action = "ASK";
+    difficultyDirection = "SAME";
+    reason =
+      "This concept supports later material — confirming it is solid before moving on.";
+    narrative.push(
+      "Later concepts build directly on this one.",
+      "Making sure it is solid before advancing.",
+    );
   } else if (masteryImproved && facts.masteryPoints >= MASTERY_MEDIUM) {
     action = "ASSESS";
     difficultyDirection = "HARDER";
@@ -233,6 +257,16 @@ export function baselineDecision(facts: PolicyFacts): ResolvedTeachingDecision {
       facts.attempts === 0
         ? "Introducing a new concept."
         : "Concept still not landing — simplifying.",
+    );
+  }
+
+  if (
+    facts.weakUpstreamPrerequisite &&
+    action !== "MOVE_FORWARD" &&
+    action !== "INCREASE_DIFFICULTY"
+  ) {
+    narrative.push(
+      `Connecting back to ${facts.weakUpstreamPrerequisite.title}, which is still shaky and supports this concept.`,
     );
   }
 
@@ -312,6 +346,24 @@ export function reconcileDecision(
     nextAction = "ASK";
     narrative.push(
       "Mastery is not high enough to move on yet — consolidating first.",
+    );
+  }
+
+  // 2a. Graph-aware: don't advance past a load-bearing concept on merely
+  //     "developing" mastery — later concepts depend on it.
+  if (
+    FORWARD_ACTIONS.has(action) &&
+    facts.currentConceptIsLoadBearing &&
+    facts.masteryPoints < MASTERY_HIGH
+  ) {
+    overrides.push(
+      `AI proposed ${action}, but this concept supports later material and mastery is only ${facts.masteryPoints}/100 — checking once more.`,
+    );
+    action = "ASK";
+    difficultyDirection = "SAME";
+    nextAction = null;
+    narrative.push(
+      "Later concepts build on this one — confirming it is solid first.",
     );
   }
 
