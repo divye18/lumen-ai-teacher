@@ -4,6 +4,7 @@ import {
   assessmentStatusSchema,
   assessmentTypeSchema,
   conceptRelationshipTypeSchema,
+  documentStatusSchema,
   interactionRoleSchema,
   interactionTypeSchema,
   learningStrategySchema,
@@ -200,3 +201,48 @@ export const recordAssessmentAnswerSchema = z.object({
 export type RecordAssessmentAnswerInput = z.infer<
   typeof recordAssessmentAnswerSchema
 >;
+
+// ── documents + chunks (RAG) ────────────────────────────────────────────────
+export const createDocumentSchema = z.object({
+  userId: uuidSchema,
+  title: z.string().min(1).max(300),
+  fileName: z.string().min(1).max(300),
+  fileType: z.string().min(1).max(120),
+  fileSize: z.number().int().min(0).nullish(),
+  storagePath: z.string().max(1024).nullish(),
+  status: documentStatusSchema.default("PROCESSING"),
+  metadata: metadataSchema.optional(),
+});
+export type CreateDocumentInput = z.infer<typeof createDocumentSchema>;
+
+export const updateDocumentStatusSchema = z.object({
+  documentId: uuidSchema,
+  status: documentStatusSchema,
+  metadata: metadataSchema.optional(),
+});
+export type UpdateDocumentStatusInput = z.infer<
+  typeof updateDocumentStatusSchema
+>;
+
+/** One chunk to persist. `embedding` length is checked against the model dim. */
+export const documentChunkInsertSchema = z.object({
+  documentId: uuidSchema,
+  userId: uuidSchema,
+  content: z.string().min(1).max(40_000),
+  chunkIndex: nonNegativeIntSchema,
+  pageNumber: z.number().int().min(0).nullish(),
+  sectionTitle: z.string().max(500).nullish(),
+  metadata: metadataSchema.optional(),
+  embedding: z.array(z.number()).min(1),
+});
+export type DocumentChunkInsertInput = z.infer<
+  typeof documentChunkInsertSchema
+>;
+
+export const matchChunksSchema = z.object({
+  queryEmbedding: z.array(z.number()).min(1),
+  matchCount: z.number().int().min(1).max(50).default(8),
+  similarityThreshold: unitScoreSchema.default(0),
+  documentId: uuidSchema.nullish(),
+});
+export type MatchChunksInput = z.infer<typeof matchChunksSchema>;

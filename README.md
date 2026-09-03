@@ -127,10 +127,10 @@ Never commit `.env.local` or real secrets.
 
 ## Database
 
-Postgres on **Supabase**, with `pgvector` enabled now (the same database backs
-RAG later — there is no separate vector store). Vector _search_ is not
-implemented yet, and the `document_chunks.embedding` column is an unbounded
-`vector` until the embedding model is chosen.
+Postgres on **Supabase** with `pgvector` — one database, no separate vector
+store. `document_chunks.embedding` is `vector(1536)` (migration
+`20260903000100`) with an HNSW cosine index, and semantic search runs through
+the `match_document_chunks` RPC (see [RAG](#document-ingestion--retrieval-rag)).
 
 ### Architecture
 
@@ -196,10 +196,44 @@ npm run db:types            # supabase gen types typescript --local > src/lib/db
 ### Tests
 
 - **Unit** (`npm test`) — schema bounds, enum/language validation, learner-state
-  assembly. No network.
-- **Integration** (`npm run test:integration`) — run against a live local stack;
-  they self-skip unless `LUMEN_TEST_SUPABASE_URL` and
-  `LUMEN_TEST_SERVICE_ROLE_KEY` are set. Nothing is mocked.
+  assembly, chunking, PDF validation, embedding error handling. No network.
+- **Integration** (`npm run test:integration`) — run against a live stack; they
+  self-skip unless `LUMEN_TEST_SUPABASE_URL` / `LUMEN_TEST_SERVICE_ROLE_KEY`
+  (and, for RAG, `LUMEN_TEST_SUPABASE_ANON_KEY` + `LUMEN_TEST_EMBEDDING_API_KEY`)
+  are set. Nothing is mocked.
+
+## Document ingestion & retrieval (RAG)
+
+PDF-only for now. The pipeline is server-side and deterministic; every provider
+secret stays server-only.
+
+```
+PDF bytes → validate (magic number + size + MIME cross-check)
+          → extract per-page text (unpdf / pdf.js)
+          → normalize + deterministic chunk (paragraph/heading aware)
+          → embed (OpenAI-compatible, behind EmbeddingProvider)
+          → persist documents + document_chunks (with pgvector embedding)
+```
+
+- **Embedding model** — `text-embedding-3-small`, **1536 dims**, via the
+  OpenAI `/embeddings` REST API (no vendor SDK). Configure with
+  `EMBEDDING_PROVIDER` / `EMBEDDING_MODEL` / `EMBEDDING_BASE_URL` /
+  `EMBEDDING_DIMENSIONS` / `EMBEDDING_API_KEY`. Changing the dimension needs a
+  new migration altering `document_chunks.embedding` and rebuilding the index.
+- **Chunking** — character-based, configurable via `RAG_CHUNK_SIZE` /
+  `RAG_CHUNK_OVERLAP` / `RAG_MIN_CHUNK_SIZE`. Splits on paragraphs and headings,
+  falls back to sentence then hard cuts, merges tiny fragments, carries
+  `sectionTitle` + page number + char range for citations. No LLM involved.
+- **Retrieval** — `POST /api/retrieval` embeds the query and calls the
+  `match_document_chunks` RPC (`SECURITY INVOKER`, `user_id = auth.uid()`,
+  granted only to `authenticated`). Cross-user retrieval is impossible.
+  Results carry document id/name, chunk id/index, page, section, and score.
+- **Ingestion** — `POST /api/documents/ingest` (multipart `file`, optional
+  `title`). Auth via the Supabase session cookie; ownership is the auth user.
+
+New migrations to push (`npx supabase db push`):
+`20260903000000_auto_create_profile`, `20260903000100_document_chunks_embedding_dimension`,
+`20260903000200_document_chunks_vector_index`, `20260903000300_match_document_chunks_rpc`.
 
 ## Project status
 
@@ -215,21 +249,26 @@ Implemented so far:
       interaction, concept, misconception, assessment)
 - [x] **Persistent `LearnerStateStore`** + database → `LearnerState` assembly
 - [x] **Development seed data** (Computer Memory)
+- [x] **RAG foundation** — PDF ingestion, deterministic chunking, OpenAI
+      embeddings behind `EmbeddingProvider`, `vector(1536)` + HNSW index,
+      RLS-scoped `match_document_chunks` RPC, `/api/documents/ingest` +
+      `/api/retrieval`
+- [x] **Auto-create profile** trigger for new auth users
 - [x] Routes: `/`, `/setup`, `/lesson`, `/report`, `/api/health`
 - [x] ESLint, Prettier, Vitest (unit + integration split)
 
-**Not** implemented (later phases): document ingestion, RAG, embeddings and
-vector search, the teaching decision engine, misconception _detection_,
-assessment _grading_, voice, avatar, 3D scenes, dashboards, authentication UI,
-and lesson UI.
+**Not** implemented (later phases): document _upload UI_, RAG _re-ranking_,
+the teaching decision engine, misconception _detection_, assessment _grading_,
+voice, avatar, 3D scenes, dashboards, authentication UI, and lesson UI.
 
 ## Planned development phases
 
 1. **Foundation** _(done)_ — skeleton, contracts, tooling.
 2. **Data layer** _(done)_ — Supabase schema + migrations, pgvector enabled,
    RLS, typed repositories, persistent learner state, seed data.
-3. **Ingestion & RAG** — document parsing, chunking, embeddings, retrieval
-   (fixes the embedding dimension and adds the vector index).
+3. **Ingestion & RAG** _(phase 1 done)_ — PDF parsing, deterministic chunking,
+   embeddings, pgvector retrieval, ingest/retrieval APIs. Next: more formats,
+   re-ranking, concept extraction.
 4. **Teaching engine** — the AI decision layer producing validated
    `TeachingDecision`s; deterministic lesson runtime.
 5. **Assessment & misconceptions** — answer evaluation, misconception

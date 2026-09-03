@@ -15,7 +15,14 @@ export type LumenErrorCode =
   | "NOT_FOUND"
   | "UNAUTHORIZED"
   | "RATE_LIMITED"
-  | "UNKNOWN";
+  | "UNKNOWN"
+  // RAG / ingestion / retrieval
+  | "UNSUPPORTED_DOCUMENT_TYPE"
+  | "DOCUMENT_TOO_LARGE"
+  | "EMPTY_DOCUMENT"
+  | "TEXT_EXTRACTION_FAILED"
+  | "EMBEDDING_ERROR"
+  | "RETRIEVAL_ERROR";
 
 export class LumenError extends Error {
   readonly code: LumenErrorCode;

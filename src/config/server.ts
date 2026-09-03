@@ -26,9 +26,17 @@ const serverEnvSchema = z.object({
   LLM_API_KEY: z.string().min(1).optional(),
   LLM_MODEL: z.string().min(1).optional(),
 
-  EMBEDDING_PROVIDER: z.string().min(1).optional(),
+  EMBEDDING_PROVIDER: z.string().min(1).default("openai"),
   EMBEDDING_API_KEY: z.string().min(1).optional(),
-  EMBEDDING_MODEL: z.string().min(1).optional(),
+  EMBEDDING_MODEL: z.string().min(1).default("text-embedding-3-small"),
+  EMBEDDING_BASE_URL: z.string().url().default("https://api.openai.com/v1"),
+  EMBEDDING_DIMENSIONS: z.coerce.number().int().positive().default(1536),
+
+  // RAG ingestion tuning. Chunk sizes are in characters.
+  RAG_MAX_PDF_BYTES: z.coerce.number().int().positive().default(15_000_000),
+  RAG_CHUNK_SIZE: z.coerce.number().int().positive().default(1000),
+  RAG_CHUNK_OVERLAP: z.coerce.number().int().min(0).default(150),
+  RAG_MIN_CHUNK_SIZE: z.coerce.number().int().positive().default(120),
 
   SPEECH_TO_TEXT_PROVIDER: z.string().min(1).optional(),
   SPEECH_TO_TEXT_API_KEY: z.string().min(1).optional(),
@@ -71,7 +79,16 @@ export const serverConfig = {
       provider: env.EMBEDDING_PROVIDER,
       apiKey: env.EMBEDDING_API_KEY,
       model: env.EMBEDDING_MODEL,
+      baseUrl: env.EMBEDDING_BASE_URL,
+      dimensions: env.EMBEDDING_DIMENSIONS,
     },
+  },
+
+  rag: {
+    maxPdfBytes: env.RAG_MAX_PDF_BYTES,
+    chunkSize: env.RAG_CHUNK_SIZE,
+    chunkOverlap: env.RAG_CHUNK_OVERLAP,
+    minChunkSize: env.RAG_MIN_CHUNK_SIZE,
   },
 
   voice: {

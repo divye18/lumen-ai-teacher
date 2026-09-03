@@ -562,7 +562,27 @@ export interface Database {
       };
     };
     Views: Record<never, never>;
-    Functions: Record<never, never>;
+    Functions: {
+      /** Vector similarity search over the caller's own document chunks (RLS-scoped). */
+      match_document_chunks: {
+        Args: {
+          query_embedding: string;
+          match_count?: number;
+          similarity_threshold?: number;
+          filter_document_id?: string | null;
+        };
+        Returns: {
+          id: Uuid;
+          document_id: Uuid;
+          chunk_index: number;
+          content: string;
+          page_number: number | null;
+          section_title: string | null;
+          metadata: Json;
+          similarity: number;
+        }[];
+      };
+    };
     Enums: Record<never, never>;
     CompositeTypes: Record<never, never>;
   };

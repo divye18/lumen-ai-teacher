@@ -48,5 +48,12 @@ export {
   type AssessmentAnswerRow,
   type ClientAssessmentQuestion,
 } from "./assessment-store";
+export {
+  createDocumentStore,
+  type DocumentStore,
+  type DocumentRow,
+  type DocumentChunkRow,
+  type ChunkMatch,
+} from "./document-store";
 
 export { type DbClient } from "./shared";
