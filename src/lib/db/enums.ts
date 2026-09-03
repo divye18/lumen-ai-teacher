@@ -127,3 +127,70 @@ export const QUESTION_TYPES = [
 ] as const;
 export type QuestionType = (typeof QUESTION_TYPES)[number];
 export const questionTypeSchema = z.enum(QUESTION_TYPES);
+
+// ── Phase 2: teaching engine ───────────────────────────────────────────────
+
+export const LESSON_STATUSES = [
+  "DRAFT",
+  "ACTIVE",
+  "COMPLETED",
+  "ABANDONED",
+] as const;
+export type LessonStatus = (typeof LESSON_STATUSES)[number];
+export const lessonStatusSchema = z.enum(LESSON_STATUSES);
+
+export const LESSON_PLAN_SOURCES = ["ai", "ai+source", "fallback"] as const;
+export type LessonPlanSource = (typeof LESSON_PLAN_SOURCES)[number];
+export const lessonPlanSourceSchema = z.enum(LESSON_PLAN_SOURCES);
+
+export const LESSON_CONCEPT_STATUSES = [
+  "PENDING",
+  "TEACHING",
+  "ASSESSING",
+  "COMPLETED",
+  "SKIPPED",
+] as const;
+export type LessonConceptStatus = (typeof LESSON_CONCEPT_STATUSES)[number];
+export const lessonConceptStatusSchema = z.enum(LESSON_CONCEPT_STATUSES);
+
+/** Question difficulty ladder: definition → application → scenario → problem. */
+export const QUESTION_KINDS = [
+  "CONCEPTUAL",
+  "APPLICATION",
+  "SCENARIO",
+  "PROBLEM_SOLVING",
+] as const;
+export type QuestionKind = (typeof QUESTION_KINDS)[number];
+export const questionKindSchema = z.enum(QUESTION_KINDS);
+
+export const ANSWER_CLASSIFICATIONS = [
+  "CORRECT",
+  "PARTIALLY_CORRECT",
+  "INCORRECT",
+  "UNCERTAIN",
+] as const;
+export type AnswerClassification = (typeof ANSWER_CLASSIFICATIONS)[number];
+export const answerClassificationSchema = z.enum(ANSWER_CLASSIFICATIONS);
+
+/** Matches `TEACHING_ACTIONS` in `@/types/teaching`; duplicated here for DB-layer validation. */
+export const TEACHING_ACTIONS = [
+  "EXPLAIN",
+  "EXAMPLE",
+  "ANALOGY",
+  "VISUALIZE",
+  "ASK",
+  "HINT",
+  "SIMPLIFY",
+  "RETEACH",
+  "RECAP",
+  "INCREASE_DIFFICULTY",
+  "DECREASE_DIFFICULTY",
+  "ASSESS",
+  "MOVE_FORWARD",
+] as const;
+export type TeachingActionName = (typeof TEACHING_ACTIONS)[number];
+
+/** Teaching style === explanation strategy; alias for readability at call sites. */
+export const TEACHING_STYLES = LEARNING_STRATEGIES;
+export type TeachingStyle = LearningStrategy;
+export const teachingStyleSchema = learningStrategySchema;

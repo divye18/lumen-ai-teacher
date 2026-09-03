@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import {
+  answerClassificationSchema,
   assessmentStatusSchema,
   assessmentTypeSchema,
   conceptRelationshipTypeSchema,
@@ -8,13 +9,23 @@ import {
   interactionRoleSchema,
   interactionTypeSchema,
   learningStrategySchema,
+  lessonConceptStatusSchema,
+  lessonPlanSourceSchema,
+  lessonStatusSchema,
   masteryStatusSchema,
   misconceptionSeveritySchema,
   misconceptionStatusSchema,
+  questionKindSchema,
   questionTypeSchema,
   sessionStatusSchema,
   supportedLanguageSchema,
+  teachingStyleSchema,
 } from "./enums";
+
+/** Stable per-lesson concept key: lowercase, digits, hyphens. */
+export const conceptKeySchema = z
+  .string()
+  .regex(/^[a-z0-9-]{1,80}$/, "expected a lowercase-hyphen concept key");
 
 /**
  * Zod schemas validating every value that crosses into a repository write.
@@ -113,6 +124,17 @@ export const updateMisconceptionStatusSchema = z.object({
   id: uuidSchema,
   status: misconceptionStatusSchema,
 });
+
+export const strengthenMisconceptionSchema = z.object({
+  id: uuidSchema,
+  confidence: unitScoreSchema,
+  detections: nonNegativeIntSchema,
+  severity: misconceptionSeveritySchema.optional(),
+  evidenceEntry: metadataSchema.optional(),
+});
+export type StrengthenMisconceptionInput = z.infer<
+  typeof strengthenMisconceptionSchema
+>;
 
 // ── sessions ────────────────────────────────────────────────────────────────
 export const createSessionSchema = z.object({
@@ -246,3 +268,110 @@ export const matchChunksSchema = z.object({
   documentId: uuidSchema.nullish(),
 });
 export type MatchChunksInput = z.infer<typeof matchChunksSchema>;
+
+// ── Phase 2: lessons + teaching questions/answers ─────────────────────────
+const jsonValueSchema: z.ZodType<unknown> = z.lazy(() =>
+  z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.null(),
+    z.array(jsonValueSchema),
+    z.record(z.string(), jsonValueSchema),
+  ]),
+);
+
+export const createLessonSchema = z.object({
+  userId: uuidSchema,
+  documentId: uuidSchema.nullish(),
+  title: z.string().min(1).max(300),
+  topic: z.string().min(1).max(300),
+  objective: z.string().min(1).max(4000),
+  language: supportedLanguageSchema.default("en"),
+  teachingStyle: teachingStyleSchema.nullish(),
+  estimatedMinutes: z.number().int().min(1).max(600).nullish(),
+  sourceGrounded: z.boolean().default(false),
+  planSource: lessonPlanSourceSchema.default("fallback"),
+  status: lessonStatusSchema.default("DRAFT"),
+  plan: jsonValueSchema.default({}),
+  citations: z.array(jsonValueSchema).default([]),
+});
+export type CreateLessonInput = z.infer<typeof createLessonSchema>;
+
+export const updateLessonSchema = z.object({
+  id: uuidSchema,
+  status: lessonStatusSchema.optional(),
+  plan: jsonValueSchema.optional(),
+  citations: z.array(jsonValueSchema).optional(),
+});
+export type UpdateLessonInput = z.infer<typeof updateLessonSchema>;
+
+export const addLessonConceptSchema = z.object({
+  lessonId: uuidSchema,
+  conceptId: uuidSchema.nullish(),
+  conceptKey: conceptKeySchema,
+  title: z.string().min(1).max(200),
+  summary: z.string().max(4000).default(""),
+  position: nonNegativeIntSchema,
+  difficulty: difficultySchema.default(3),
+  importance: difficultySchema.default(3),
+  isPrerequisite: z.boolean().default(false),
+  status: lessonConceptStatusSchema.default("PENDING"),
+});
+export type AddLessonConceptInput = z.infer<typeof addLessonConceptSchema>;
+
+export const updateLessonConceptStatusSchema = z.object({
+  id: uuidSchema,
+  status: lessonConceptStatusSchema,
+});
+export type UpdateLessonConceptStatusInput = z.infer<
+  typeof updateLessonConceptStatusSchema
+>;
+
+export const createTeachingQuestionSchema = z.object({
+  sessionId: uuidSchema,
+  lessonId: uuidSchema.nullish(),
+  userId: uuidSchema,
+  conceptKey: conceptKeySchema,
+  conceptId: uuidSchema.nullish(),
+  questionKind: questionKindSchema,
+  difficulty: difficultySchema.default(3),
+  prompt: z.string().min(1).max(4000),
+  expectedReasoning: z.string().max(4000).nullish(),
+  sourceGrounded: z.boolean().default(false),
+  citations: z.array(jsonValueSchema).default([]),
+  metadata: metadataSchema.optional(),
+});
+export type CreateTeachingQuestionInput = z.infer<
+  typeof createTeachingQuestionSchema
+>;
+
+export const recordTeachingAnswerSchema = z.object({
+  questionId: uuidSchema,
+  sessionId: uuidSchema,
+  userId: uuidSchema,
+  responseText: z.string().max(20_000).default(""),
+  classification: answerClassificationSchema.nullish(),
+  correctnessScore: unitScoreSchema.nullish(),
+  evaluation: jsonValueSchema.default({}),
+  responseTimeMs: z.number().int().min(0).nullish(),
+});
+export type RecordTeachingAnswerInput = z.infer<
+  typeof recordTeachingAnswerSchema
+>;
+
+export const updateSessionTeachingSchema = z.object({
+  id: uuidSchema,
+  lessonId: uuidSchema.nullish(),
+  status: sessionStatusSchema.optional(),
+  currentConceptId: uuidSchema.nullish(),
+  currentAction: z.string().max(60).nullish(),
+  planCursor: nonNegativeIntSchema.optional(),
+  timeBudgetMinutes: z.number().int().min(1).max(600).nullish(),
+  masterySnapshot: jsonValueSchema.optional(),
+  startedAt: isoDateTimeSchema.nullish(),
+  endedAt: isoDateTimeSchema.nullish(),
+});
+export type UpdateSessionTeachingInput = z.infer<
+  typeof updateSessionTeachingSchema
+>;

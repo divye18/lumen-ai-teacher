@@ -22,9 +22,11 @@ const serverEnvSchema = z.object({
 
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
 
-  LLM_PROVIDER: z.string().min(1).optional(),
+  LLM_PROVIDER: z.string().min(1).default("openai"),
   LLM_API_KEY: z.string().min(1).optional(),
-  LLM_MODEL: z.string().min(1).optional(),
+  LLM_MODEL: z.string().min(1).default("gpt-4o-mini"),
+  LLM_BASE_URL: z.string().url().default("https://api.openai.com/v1"),
+  LLM_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.2),
 
   EMBEDDING_PROVIDER: z.string().min(1).default("openai"),
   EMBEDDING_API_KEY: z.string().min(1).optional(),
@@ -74,6 +76,8 @@ export const serverConfig = {
       provider: env.LLM_PROVIDER,
       apiKey: env.LLM_API_KEY,
       model: env.LLM_MODEL,
+      baseUrl: env.LLM_BASE_URL,
+      temperature: env.LLM_TEMPERATURE,
     },
     embedding: {
       provider: env.EMBEDDING_PROVIDER,

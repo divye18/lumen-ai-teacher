@@ -22,7 +22,13 @@ export type LumenErrorCode =
   | "EMPTY_DOCUMENT"
   | "TEXT_EXTRACTION_FAILED"
   | "EMBEDDING_ERROR"
-  | "RETRIEVAL_ERROR";
+  | "RETRIEVAL_ERROR"
+  // Teaching engine / AI generation / sessions
+  | "AI_GENERATION_FAILED"
+  | "MALFORMED_AI_OUTPUT"
+  | "SESSION_NOT_FOUND"
+  | "LESSON_NOT_FOUND"
+  | "PERSISTENCE_FAILED";
 
 export class LumenError extends Error {
   readonly code: LumenErrorCode;
@@ -72,5 +78,57 @@ export class ValidationError extends LumenError {
     super("VALIDATION_FAILED", message, { recoverable: true });
     this.name = "ValidationError";
     this.issues = issues;
+  }
+}
+
+/** The LLM call itself failed (network, provider HTTP error, timeout). */
+export class AiGenerationError extends LumenError {
+  constructor(message: string, options: { cause?: unknown } = {}) {
+    super("AI_GENERATION_FAILED", `AI generation failed: ${message}`, {
+      recoverable: true,
+      cause: options.cause,
+    });
+    this.name = "AiGenerationError";
+  }
+}
+
+/** The LLM returned output that never satisfied the required schema. */
+export class MalformedAiOutputError extends LumenError {
+  readonly issues: unknown;
+  constructor(message: string, issues?: unknown) {
+    super("MALFORMED_AI_OUTPUT", `Malformed AI output: ${message}`, {
+      recoverable: true,
+    });
+    this.name = "MalformedAiOutputError";
+    this.issues = issues;
+  }
+}
+
+export class SessionNotFoundError extends LumenError {
+  constructor(sessionId: string) {
+    super("SESSION_NOT_FOUND", `Learning session ${sessionId} was not found.`, {
+      recoverable: false,
+    });
+    this.name = "SessionNotFoundError";
+  }
+}
+
+export class LessonNotFoundError extends LumenError {
+  constructor(lessonId: string) {
+    super("LESSON_NOT_FOUND", `Lesson ${lessonId} was not found.`, {
+      recoverable: false,
+    });
+    this.name = "LessonNotFoundError";
+  }
+}
+
+/** A write to the database failed after validation passed. */
+export class PersistenceError extends LumenError {
+  constructor(message: string, options: { cause?: unknown } = {}) {
+    super("PERSISTENCE_FAILED", `Persistence failed: ${message}`, {
+      recoverable: true,
+      cause: options.cause,
+    });
+    this.name = "PersistenceError";
   }
 }

@@ -2,37 +2,24 @@ import {
   teachingDecisionSchema,
   type TeachingDecision,
 } from "@/types/teaching";
-import type { LearnerState } from "@/types/learner";
-import type { Interaction } from "@/types/lesson";
 import { ValidationError } from "@/lib/errors";
 import { err, ok, type Result } from "@/lib/result";
 
 /**
- * Teaching orchestration boundary.
+ * Teaching domain — the adaptive decision layer.
  *
- * Core principle: AI decides WHAT, deterministic code decides HOW. A
- * `TeachingEngine` implementation may consult an LLM to choose an action, but
- * its output MUST be a schema-valid {@link TeachingDecision}. The deterministic
- * lesson runtime (later phase) turns that decision into a `LessonStep`.
- *
- * The decision engine itself is not implemented in the foundation phase.
+ * Core principle: AI decides WHAT (a proposal), deterministic code decides HOW
+ * (validation + reconciliation + numeric state). See:
+ *   - `contracts.ts` — every AI-output Zod schema
+ *   - `mastery.ts`   — bounded, interpretable 0–100 learner-state math
+ *   - `policy.ts`    — deterministic guardrails + strategy/difficulty ladders
+ *   - `engine.ts`    — LLM proposal → reconcile → `ResolvedTeachingDecision`
  */
-export interface TeachingContext {
-  learnerState: LearnerState;
-  /** Most recent interactions, newest last. */
-  recentInteractions: Interaction[];
-  /** Concept slug currently in focus. */
-  conceptSlug: string;
-}
-
-export interface TeachingEngine {
-  readonly id: string;
-  decide(context: TeachingContext): Promise<Result<TeachingDecision>>;
-}
 
 /**
- * Validate an untrusted (e.g. AI-produced) object into a `TeachingDecision`.
- * This is the single choke point every decision must pass through.
+ * Validate an untrusted object into the rendered {@link TeachingDecision} that
+ * a `LessonStep` records. This is the choke point for the *rendered* decision
+ * (with its question text attached), distinct from the engine's proposal.
  */
 export function parseTeachingDecision(
   input: unknown,
@@ -63,3 +50,34 @@ export function parseTeachingDecision(
 }
 
 export { teachingDecisionSchema, type TeachingDecision };
+
+export * from "./contracts";
+export * from "./mastery";
+export {
+  QUESTION_LADDER,
+  STRATEGY_ROTATION,
+  nextQuestionKind,
+  nextStrategy,
+  baselineDecision,
+  reconcileDecision,
+  type PolicyFacts,
+} from "./policy";
+export {
+  createTeachingEngine,
+  type TeachingEngine,
+  type TeachingReasoningInput,
+  type CreateTeachingEngineOptions,
+} from "./engine";
+export {
+  generateTeachingContent,
+  type GenerateTeachingContentInput,
+  type TeachingContentResult,
+} from "./content-generator";
+export { slugifyConceptKey, titleCase, clampInt } from "./keys";
+export {
+  buildEnginePrompt,
+  buildTeachingContentPrompt,
+  type PromptPair,
+  type EngineConceptContext,
+  type EngineSignalContext,
+} from "./prompts";

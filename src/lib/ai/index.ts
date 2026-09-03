@@ -7,3 +7,9 @@ export {
   isLLMConfigured,
   isEmbeddingConfigured,
 } from "./registry";
+export {
+  generateStructured,
+  extractJsonObject,
+  type StructuredRequest,
+  type StructuredResult,
+} from "./structured";

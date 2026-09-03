@@ -55,5 +55,18 @@ export {
   type DocumentChunkRow,
   type ChunkMatch,
 } from "./document-store";
+export {
+  createLessonStore,
+  type LessonStore,
+  type LessonRow,
+  type LessonConceptRow,
+} from "./lesson-store";
+export {
+  createTeachingQaStore,
+  type TeachingQaStore,
+  type TeachingQuestionRow,
+  type TeachingAnswerRow,
+  type ClientTeachingQuestion,
+} from "./teaching-qa-store";
 
 export { type DbClient } from "./shared";

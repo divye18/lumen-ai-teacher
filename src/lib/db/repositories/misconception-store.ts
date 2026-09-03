@@ -1,14 +1,23 @@
 import type { Json } from "@/lib/db/types";
-import type { Result } from "@/lib/result";
+import { LumenError } from "@/lib/errors";
+import { err, type Result } from "@/lib/result";
 
 import type { Tables, TablesInsert, TablesUpdate } from "../types";
 import {
   recordMisconceptionSchema,
+  strengthenMisconceptionSchema,
   updateMisconceptionStatusSchema,
   type RecordMisconceptionInput,
+  type StrengthenMisconceptionInput,
 } from "../schemas";
 import type { MisconceptionStatus } from "../enums";
-import { type DbClient, listResult, parseInput, rowResult } from "./shared";
+import {
+  fromPostgrestError,
+  listResult,
+  parseInput,
+  rowResult,
+  type DbClient,
+} from "./shared";
 
 export type MisconceptionRow = Tables<"misconceptions">;
 
@@ -25,6 +34,10 @@ export interface MisconceptionStore {
   ): Promise<Result<MisconceptionRow>>;
   /** Convenience: mark RESOLVED and stamp resolved_at. */
   resolve(id: string): Promise<Result<MisconceptionRow>>;
+  /** Reinforce an existing misconception with fresh evidence. */
+  strengthen(
+    input: StrengthenMisconceptionInput,
+  ): Promise<Result<MisconceptionRow>>;
 }
 
 export function createMisconceptionStore(db: DbClient): MisconceptionStore {
@@ -108,6 +121,52 @@ export function createMisconceptionStore(db: DbClient): MisconceptionStore {
 
     resolve(id) {
       return setStatus(id, "RESOLVED");
+    },
+
+    async strengthen(input) {
+      const parsed = parseInput(strengthenMisconceptionSchema, input);
+      if (!parsed.ok) return parsed;
+      const v = parsed.value;
+
+      const existing = await db
+        .from("misconceptions")
+        .select("*")
+        .eq("id", v.id)
+        .maybeSingle();
+      if (existing.error) return err(fromPostgrestError(existing.error));
+      if (!existing.data) {
+        return err(
+          new LumenError("NOT_FOUND", `Misconception ${v.id} not found.`, {
+            recoverable: true,
+          }),
+        );
+      }
+
+      const meta =
+        (existing.data.metadata as Record<string, unknown> | null) ?? {};
+      const evidence = Array.isArray(existing.data.evidence)
+        ? [...(existing.data.evidence as unknown[])]
+        : [];
+      if (v.evidenceEntry) evidence.push(v.evidenceEntry);
+
+      const patch: TablesUpdate<"misconceptions"> = {
+        confidence: v.confidence,
+        last_detected_at: new Date().toISOString(),
+        status:
+          existing.data.status === "RESOLVED" ? "ACTIVE" : existing.data.status,
+        ...(v.severity ? { severity: v.severity } : {}),
+        metadata: { ...meta, detections: v.detections } as Json,
+        evidence: evidence.slice(0, 50) as Json,
+      };
+
+      return rowResult(
+        await db
+          .from("misconceptions")
+          .update(patch)
+          .eq("id", v.id)
+          .select("*")
+          .single(),
+      );
     },
   };
 }

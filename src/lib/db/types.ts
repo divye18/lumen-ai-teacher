@@ -259,6 +259,12 @@ export interface Database {
           ended_at: Timestamptz | null;
           created_at: Timestamptz;
           updated_at: Timestamptz;
+          // Phase 2 — teaching loop
+          lesson_id: Uuid | null;
+          time_budget_minutes: number | null;
+          current_action: string | null;
+          plan_cursor: number;
+          mastery_snapshot: Json;
         };
         Insert: {
           id?: Uuid;
@@ -273,6 +279,11 @@ export interface Database {
           ended_at?: Timestamptz | null;
           created_at?: Timestamptz;
           updated_at?: Timestamptz;
+          lesson_id?: Uuid | null;
+          time_budget_minutes?: number | null;
+          current_action?: string | null;
+          plan_cursor?: number;
+          mastery_snapshot?: Json;
         };
         Update: {
           id?: Uuid;
@@ -287,6 +298,207 @@ export interface Database {
           ended_at?: Timestamptz | null;
           created_at?: Timestamptz;
           updated_at?: Timestamptz;
+          lesson_id?: Uuid | null;
+          time_budget_minutes?: number | null;
+          current_action?: string | null;
+          plan_cursor?: number;
+          mastery_snapshot?: Json;
+        };
+        Relationships: [];
+      };
+
+      lessons: {
+        Row: {
+          id: Uuid;
+          user_id: Uuid;
+          document_id: Uuid | null;
+          title: string;
+          topic: string;
+          objective: string;
+          language: string;
+          teaching_style: string | null;
+          estimated_minutes: number | null;
+          source_grounded: boolean;
+          plan_source: string;
+          status: string;
+          plan: Json;
+          citations: Json;
+          created_at: Timestamptz;
+          updated_at: Timestamptz;
+        };
+        Insert: {
+          id?: Uuid;
+          user_id: Uuid;
+          document_id?: Uuid | null;
+          title: string;
+          topic: string;
+          objective: string;
+          language?: string;
+          teaching_style?: string | null;
+          estimated_minutes?: number | null;
+          source_grounded?: boolean;
+          plan_source?: string;
+          status?: string;
+          plan?: Json;
+          citations?: Json;
+          created_at?: Timestamptz;
+          updated_at?: Timestamptz;
+        };
+        Update: {
+          id?: Uuid;
+          user_id?: Uuid;
+          document_id?: Uuid | null;
+          title?: string;
+          topic?: string;
+          objective?: string;
+          language?: string;
+          teaching_style?: string | null;
+          estimated_minutes?: number | null;
+          source_grounded?: boolean;
+          plan_source?: string;
+          status?: string;
+          plan?: Json;
+          citations?: Json;
+          created_at?: Timestamptz;
+          updated_at?: Timestamptz;
+        };
+        Relationships: [];
+      };
+
+      lesson_concepts: {
+        Row: {
+          id: Uuid;
+          lesson_id: Uuid;
+          concept_id: Uuid | null;
+          concept_key: string;
+          title: string;
+          summary: string;
+          position: number;
+          difficulty: number;
+          importance: number;
+          is_prerequisite: boolean;
+          status: string;
+          created_at: Timestamptz;
+        };
+        Insert: {
+          id?: Uuid;
+          lesson_id: Uuid;
+          concept_id?: Uuid | null;
+          concept_key: string;
+          title: string;
+          summary?: string;
+          position: number;
+          difficulty?: number;
+          importance?: number;
+          is_prerequisite?: boolean;
+          status?: string;
+          created_at?: Timestamptz;
+        };
+        Update: {
+          id?: Uuid;
+          lesson_id?: Uuid;
+          concept_id?: Uuid | null;
+          concept_key?: string;
+          title?: string;
+          summary?: string;
+          position?: number;
+          difficulty?: number;
+          importance?: number;
+          is_prerequisite?: boolean;
+          status?: string;
+          created_at?: Timestamptz;
+        };
+        Relationships: [];
+      };
+
+      teaching_questions: {
+        Row: {
+          id: Uuid;
+          session_id: Uuid;
+          lesson_id: Uuid | null;
+          user_id: Uuid;
+          concept_key: string;
+          concept_id: Uuid | null;
+          question_kind: string;
+          difficulty: number;
+          prompt: string;
+          expected_reasoning: string | null;
+          source_grounded: boolean;
+          citations: Json;
+          metadata: Json;
+          created_at: Timestamptz;
+        };
+        Insert: {
+          id?: Uuid;
+          session_id: Uuid;
+          lesson_id?: Uuid | null;
+          user_id: Uuid;
+          concept_key: string;
+          concept_id?: Uuid | null;
+          question_kind: string;
+          difficulty?: number;
+          prompt: string;
+          expected_reasoning?: string | null;
+          source_grounded?: boolean;
+          citations?: Json;
+          metadata?: Json;
+          created_at?: Timestamptz;
+        };
+        Update: {
+          id?: Uuid;
+          session_id?: Uuid;
+          lesson_id?: Uuid | null;
+          user_id?: Uuid;
+          concept_key?: string;
+          concept_id?: Uuid | null;
+          question_kind?: string;
+          difficulty?: number;
+          prompt?: string;
+          expected_reasoning?: string | null;
+          source_grounded?: boolean;
+          citations?: Json;
+          metadata?: Json;
+          created_at?: Timestamptz;
+        };
+        Relationships: [];
+      };
+
+      teaching_answers: {
+        Row: {
+          id: Uuid;
+          question_id: Uuid;
+          session_id: Uuid;
+          user_id: Uuid;
+          response_text: string;
+          classification: string | null;
+          correctness_score: number | null;
+          evaluation: Json;
+          response_time_ms: number | null;
+          created_at: Timestamptz;
+        };
+        Insert: {
+          id?: Uuid;
+          question_id: Uuid;
+          session_id: Uuid;
+          user_id: Uuid;
+          response_text?: string;
+          classification?: string | null;
+          correctness_score?: number | null;
+          evaluation?: Json;
+          response_time_ms?: number | null;
+          created_at?: Timestamptz;
+        };
+        Update: {
+          id?: Uuid;
+          question_id?: Uuid;
+          session_id?: Uuid;
+          user_id?: Uuid;
+          response_text?: string;
+          classification?: string | null;
+          correctness_score?: number | null;
+          evaluation?: Json;
+          response_time_ms?: number | null;
+          created_at?: Timestamptz;
         };
         Relationships: [];
       };

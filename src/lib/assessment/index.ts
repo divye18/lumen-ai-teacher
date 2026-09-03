@@ -36,3 +36,16 @@ export function parseAnswerEvaluation(
   }
   return ok(parsed.data);
 }
+
+export {
+  generateQuestion,
+  questionKindForMastery,
+  type GenerateQuestionInput,
+  type GeneratedQuestionResult,
+} from "./question-generator";
+export {
+  evaluateAnswer,
+  type EvaluateAnswerInput,
+  type AnswerEvaluationResult,
+} from "./evaluator";
+export { buildQuestionPrompt, buildEvaluationPrompt } from "./prompts";

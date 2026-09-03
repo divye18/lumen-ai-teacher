@@ -58,3 +58,20 @@ export interface LearnerStateStore {
 
 export { assembleLearnerState, type LearnerStateBundle } from "./assemble";
 export { createSupabaseLearnerStateStore } from "./supabase-store";
+export {
+  applyInteractionOutcome,
+  type InteractionOutcome,
+  type InteractionOutcomeInput,
+  type CurrentConceptState,
+  type LearnerStateDelta,
+  type MasteryPatch,
+} from "./state-update";
+export {
+  matchMisconception,
+  planMisconceptionUpdates,
+  normalizeCategory,
+  MISCONCEPTION_CREATE_MIN_CONFIDENCE,
+  REPEATED_DETECTION_COUNT,
+  type ExistingMisconception,
+  type MisconceptionUpdatePlan,
+} from "./misconception-tracker";

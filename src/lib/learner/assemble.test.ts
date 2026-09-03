@@ -77,6 +77,11 @@ const session: LearningSessionRow = {
   ended_at: null,
   created_at: "2026-09-01T09:30:00.000Z",
   updated_at: "2026-09-01T09:30:00.000Z",
+  lesson_id: null,
+  time_budget_minutes: null,
+  current_action: null,
+  plan_cursor: 0,
+  mastery_snapshot: {},
 };
 
 const misconception: MisconceptionRow = {
