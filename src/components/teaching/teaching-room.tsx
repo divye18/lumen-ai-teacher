@@ -22,6 +22,7 @@ import { VisualCanvas } from "@/components/visuals/visual-canvas";
 import { VoiceControls } from "@/components/voice/voice-controls";
 import { CaptionTrack } from "@/components/voice/caption-track";
 import { useVoiceController } from "@/components/voice/use-voice-controller";
+import type { VoiceCloudStatus } from "@/lib/voice/types";
 import { LinkButton } from "@/components/ui/button";
 import { ErrorState, InlineSpinner } from "@/components/ui/states";
 import { LumenWordmark } from "@/components/ui/lumen-mark";
@@ -71,10 +72,7 @@ interface InteractionResponse {
   result: InteractionResultView;
 }
 
-export interface VoiceCloudStatus {
-  stt: string | null;
-  tts: string | null;
-}
+export type { VoiceCloudStatus };
 
 interface AnswerLogEntry {
   conceptKey: string;
@@ -108,7 +106,7 @@ export function TeachingRoom({
   voiceCloud?: VoiceCloudStatus;
 }) {
   const reduce = useReducedMotion();
-  const voice = useVoiceController();
+  const voice = useVoiceController(voiceCloud);
 
   const [phase, setPhase] = useState<Phase>("loading");
   const [step, setStep] = useState<TeachingStepView | null>(null);
@@ -519,9 +517,9 @@ export function TeachingRoom({
           </div>
           {voiceEnabled && voice.capabilities.anyVoice ? (
             <p className="px-1 text-[11px] leading-snug text-[var(--color-ink-faint)]">
-              {voiceCloud.tts
+              {voice.activeProvider.tts === "cloud" && voiceCloud.tts
                 ? `Voice: ${voiceCloud.tts}`
-                : voice.capabilities.synthesis
+                : voice.activeProvider.tts === "browser"
                   ? "Voice: your browser"
                   : "Voice output unavailable — captions only"}
             </p>

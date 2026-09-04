@@ -47,3 +47,13 @@ export interface TextToSpeechProvider {
   readonly id: string;
   synthesize(options: SynthesizeOptions): Promise<Result<SynthesizeResult>>;
 }
+
+/**
+ * Which cloud voice providers are actually configured server-side — never
+ * more than a provider id, never a key. `null` means "no cloud provider
+ * configured for this channel"; the client falls back to browser voice.
+ */
+export interface VoiceCloudStatus {
+  stt: string | null;
+  tts: string | null;
+}

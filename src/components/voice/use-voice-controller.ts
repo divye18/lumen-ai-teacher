@@ -8,19 +8,36 @@ import {
   createBrowserSynthesizer,
 } from "@/lib/voice/browser-speech";
 import {
+  createCloudRecognizer,
+  createCloudSynthesizer,
+} from "@/lib/voice/cloud-speech";
+import {
+  withRecognizerFallback,
+  withSynthesizerFallback,
+} from "@/lib/voice/fallback";
+import {
   detectVoiceCapabilities,
   type VoiceCapabilities,
 } from "@/lib/voice/capabilities";
+import type { VoiceCloudStatus } from "@/lib/voice/types";
 
 /**
- * React binding for the `VoiceController`. Owns the browser Web Speech adapters
- * and a Web-Audio mic-level meter, and exposes a small, declarative surface to
- * the Teaching Room. All failures surface as `error` — never an exception.
+ * React binding for the `VoiceController`. Owns the voice adapters (cloud,
+ * falling back transparently to browser Web Speech — see `@/lib/voice/
+ * fallback`) and a Web-Audio mic-level meter, and exposes a small,
+ * declarative surface to the Teaching Room. All failures surface as `error`
+ * — never an exception. The Teaching Room never knows which provider spoke
+ * or listened.
  */
+
+/** Which provider is actually carrying each channel right now. */
+export type ActiveVoiceProvider = "cloud" | "browser" | "none";
 
 export interface VoiceControllerHook {
   state: VoiceState;
   capabilities: VoiceCapabilities;
+  /** The real provider in effect per channel — for an honest status badge. */
+  activeProvider: { stt: ActiveVoiceProvider; tts: ActiveVoiceProvider };
   partialTranscript: string;
   caption: string;
   spokenChars: number;
@@ -37,7 +54,9 @@ export interface VoiceControllerHook {
   onTranscript: (cb: (text: string) => void) => void;
 }
 
-export function useVoiceController(): VoiceControllerHook {
+export function useVoiceController(
+  voiceCloud?: VoiceCloudStatus,
+): VoiceControllerHook {
   const [state, setState] = useState<VoiceState>("IDLE");
   const [partialTranscript, setPartial] = useState("");
   const [caption, setCaption] = useState("");
@@ -55,23 +74,79 @@ export function useVoiceController(): VoiceControllerHook {
   const speakStartRef = useRef(0);
   const speakRafRef = useRef(0);
 
-  const [controller] = useState<VoiceController>(
-    () =>
-      new VoiceController({
-        recognizer: capabilities.recognition ? createBrowserRecognizer() : null,
-        synthesizer: capabilities.synthesis ? createBrowserSynthesizer() : null,
-        events: {
-          onStateChange: (next) => setState(next),
-          onPartialTranscript: (text) => setPartial(text),
-          onTranscript: () => setPartial(""),
-          onCaption: ({ text, spokenChars: n }) => {
-            setCaption(text);
-            setSpokenChars(n);
-          },
-          onError: (message) => setError(message),
+  // Built exactly once per mount — cloud adapters are only attempted when
+  // the server says a provider is actually configured, and each factory
+  // itself degrades to `null` when the underlying browser API is missing.
+  // Deliberately mount-only: `capabilities`/`voiceCloud` don't change after
+  // the first render, and the adapters below start real browser APIs.
+  const voiceDeps = useMemo(() => {
+    const browserRecognizer = capabilities.recognition
+      ? createBrowserRecognizer()
+      : null;
+    const browserSynthesizer = capabilities.synthesis
+      ? createBrowserSynthesizer()
+      : null;
+    const cloudRecognizer =
+      voiceCloud?.stt && capabilities.microphone
+        ? createCloudRecognizer()
+        : null;
+    const cloudSynthesizer = voiceCloud?.tts ? createCloudSynthesizer() : null;
+    return {
+      browserRecognizer,
+      browserSynthesizer,
+      cloudRecognizer,
+      cloudSynthesizer,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const [activeProvider, setActiveProvider] = useState<{
+    stt: ActiveVoiceProvider;
+    tts: ActiveVoiceProvider;
+  }>(() => ({
+    stt: voiceDeps.cloudRecognizer
+      ? "cloud"
+      : voiceDeps.browserRecognizer
+        ? "browser"
+        : "none",
+    tts: voiceDeps.cloudSynthesizer
+      ? "cloud"
+      : voiceDeps.browserSynthesizer
+        ? "browser"
+        : "none",
+  }));
+
+  const [controller] = useState<VoiceController>(() => {
+    const recognizer = voiceDeps.cloudRecognizer
+      ? withRecognizerFallback(
+          voiceDeps.cloudRecognizer,
+          voiceDeps.browserRecognizer,
+          () => setActiveProvider((p) => ({ ...p, stt: "browser" })),
+        )
+      : voiceDeps.browserRecognizer;
+    const synthesizer = voiceDeps.cloudSynthesizer
+      ? withSynthesizerFallback(
+          voiceDeps.cloudSynthesizer,
+          voiceDeps.browserSynthesizer,
+          () => setActiveProvider((p) => ({ ...p, tts: "browser" })),
+        )
+      : voiceDeps.browserSynthesizer;
+
+    return new VoiceController({
+      recognizer,
+      synthesizer,
+      events: {
+        onStateChange: (next) => setState(next),
+        onPartialTranscript: (text) => setPartial(text),
+        onTranscript: () => setPartial(""),
+        onCaption: ({ text, spokenChars: n }) => {
+          setCaption(text);
+          setSpokenChars(n);
         },
-      }),
-  );
+        onError: (message) => setError(message),
+      },
+    });
+  });
 
   const stopMicMeter = useCallback(() => {
     const a = audioRef.current;
@@ -190,6 +265,7 @@ export function useVoiceController(): VoiceControllerHook {
   return {
     state,
     capabilities,
+    activeProvider,
     partialTranscript,
     caption,
     spokenChars,
