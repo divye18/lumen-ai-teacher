@@ -46,7 +46,8 @@ export const DIAGNOSTIC_MAX_QUESTIONS = 8;
 const DEFAULT_TARGET_COUNT = DIAGNOSTIC_MAX_QUESTIONS;
 /** Baseline probe difficulty/kind — a pre-assessment measures footing, not mastery. */
 const DIAGNOSTIC_KIND = "CONCEPTUAL" as const;
-const DIAGNOSTIC_DIFFICULTY = 2;
+/** Exported so downstream mastery-seeding reuses the same baseline difficulty. */
+export const DIAGNOSTIC_DIFFICULTY = 2;
 
 export interface DiagnosticConceptInput {
   /** Stable, unique identifier for this concept (e.g. its normalizedKey). */
