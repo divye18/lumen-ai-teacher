@@ -8,8 +8,12 @@ import {
   misconceptionCategoriesInQuestion,
   planMisconceptionResolution,
   selectVerificationTarget,
+  selectSpacedReviewTarget,
+  selectQuestionTargetCategory,
+  MISCONCEPTION_REVIEW_INTERVAL_MS,
   type ResolvableMisconceptionState,
   type VerificationCandidate,
+  type SpacedReviewCandidate,
 } from "./misconception-resolution";
 
 function mcq(
@@ -253,6 +257,34 @@ describe("evaluateMisconceptionResolution — end-to-end composition", () => {
     });
   });
 
+  it("a reactivated row with stale clearedChecks from a prior resolution cycle does not skip straight back to RESOLVED (10 relapse safety)", () => {
+    // Simulates a relapse: the row was RESOLVED (clearedChecks: 2), strengthen()
+    // reactivated it to ACTIVE, but its metadata still carries the old
+    // clearedChecks/lastVerifiedQuestionId from before the first resolution.
+    const outcome = evaluateMisconceptionResolution({
+      misconception: state({
+        status: "ACTIVE",
+        clearedChecks: 2,
+        lastVerifiedQuestionId: "stale-question-from-before",
+      }),
+      isStructured: true,
+      classification: "CORRECT",
+      questionMisconceptionCategories: misconceptionCategoriesInQuestion(
+        mcq({ distractorMisconceptionId: "cache-is-ram" }),
+      ),
+      questionId: "q-new-1",
+    });
+    // ACTIVE always starts a fresh cycle at IMPROVING/clearedChecks:1 — never
+    // jumps straight to RESOLVED off stale metadata.
+    expect(outcome).toEqual({
+      id: "m1",
+      statusBefore: "ACTIVE",
+      statusAfter: "IMPROVING",
+      clearedChecks: 1,
+      lastVerifiedQuestionId: "q-new-1",
+    });
+  });
+
   it("a second distinct verified check resolves a fully IMPROVING misconception", () => {
     const outcome = evaluateMisconceptionResolution({
       misconception: state({
@@ -413,5 +445,188 @@ describe("selectVerificationTarget (9.2)", () => {
     const third = selectVerificationTarget([b, a, c]);
     expect(first).toBe(second);
     expect(second).toBe(third);
+  });
+});
+
+describe("selectSpacedReviewTarget (10)", () => {
+  const NOW = "2026-02-01T00:00:00.000Z";
+  const nowMs = Date.parse(NOW);
+  const DAY_MS = 86_400_000;
+
+  function isoDaysBeforeNow(days: number): string {
+    return new Date(nowMs - days * DAY_MS).toISOString();
+  }
+
+  function candidate(
+    over: Partial<SpacedReviewCandidate> = {},
+  ): SpacedReviewCandidate {
+    return {
+      id: "m1",
+      category: "cache-is-ram",
+      status: "RESOLVED",
+      resolvedAtISO: isoDaysBeforeNow(8),
+      severity: "MEDIUM",
+      ...over,
+    };
+  }
+
+  it("RESOLVED with resolved_at older than 7 days is eligible", () => {
+    expect(
+      selectSpacedReviewTarget(
+        [candidate({ resolvedAtISO: isoDaysBeforeNow(10) })],
+        NOW,
+      ),
+    ).toBe("cache-is-ram");
+  });
+
+  it("exactly 7 days old is eligible (>=, not >)", () => {
+    expect(
+      selectSpacedReviewTarget(
+        [candidate({ resolvedAtISO: isoDaysBeforeNow(7) })],
+        NOW,
+      ),
+    ).toBe("cache-is-ram");
+    // Sanity: the boundary matches the named constant exactly.
+    expect(MISCONCEPTION_REVIEW_INTERVAL_MS).toBe(7 * DAY_MS);
+  });
+
+  it("younger than 7 days is not eligible", () => {
+    expect(
+      selectSpacedReviewTarget(
+        [candidate({ resolvedAtISO: isoDaysBeforeNow(6.9) })],
+        NOW,
+      ),
+    ).toBeNull();
+  });
+
+  it("ACTIVE is excluded even if it has a resolvedAtISO value", () => {
+    expect(
+      selectSpacedReviewTarget(
+        [candidate({ status: "ACTIVE", resolvedAtISO: isoDaysBeforeNow(30) })],
+        NOW,
+      ),
+    ).toBeNull();
+  });
+
+  it("IMPROVING is excluded even if it has a resolvedAtISO value", () => {
+    expect(
+      selectSpacedReviewTarget(
+        [
+          candidate({
+            status: "IMPROVING",
+            resolvedAtISO: isoDaysBeforeNow(30),
+          }),
+        ],
+        NOW,
+      ),
+    ).toBeNull();
+  });
+
+  it("RESOLVED with a missing resolved_at is excluded", () => {
+    expect(
+      selectSpacedReviewTarget([candidate({ resolvedAtISO: null })], NOW),
+    ).toBeNull();
+  });
+
+  it("no candidates -> null", () => {
+    expect(selectSpacedReviewTarget([], NOW)).toBeNull();
+  });
+
+  it("multiple due rows: the oldest resolved_at wins, deterministically", () => {
+    const older = candidate({
+      id: "m-older",
+      category: "older-one",
+      resolvedAtISO: isoDaysBeforeNow(30),
+    });
+    const newer = candidate({
+      id: "m-newer",
+      category: "newer-one",
+      resolvedAtISO: isoDaysBeforeNow(8),
+    });
+    expect(selectSpacedReviewTarget([older, newer], NOW)).toBe("older-one");
+    expect(selectSpacedReviewTarget([newer, older], NOW)).toBe("older-one");
+  });
+
+  it("severity breaks a tie on identical resolved_at", () => {
+    const low = candidate({
+      id: "m-low",
+      category: "low-one",
+      severity: "LOW",
+    });
+    const critical = candidate({
+      id: "m-critical",
+      category: "critical-one",
+      severity: "CRITICAL",
+    });
+    expect(selectSpacedReviewTarget([low, critical], NOW)).toBe("critical-one");
+  });
+
+  it("input reordering never changes the result (multiple due rows)", () => {
+    const a = candidate({
+      id: "a",
+      category: "cat-a",
+      resolvedAtISO: isoDaysBeforeNow(9),
+    });
+    const b = candidate({
+      id: "b",
+      category: "cat-b",
+      resolvedAtISO: isoDaysBeforeNow(20),
+    });
+    const c = candidate({
+      id: "c",
+      category: "cat-c",
+      resolvedAtISO: isoDaysBeforeNow(15),
+    });
+    const first = selectSpacedReviewTarget([a, b, c], NOW);
+    const second = selectSpacedReviewTarget([c, b, a], NOW);
+    const third = selectSpacedReviewTarget([b, a, c], NOW);
+    expect(first).toBe("cat-b");
+    expect(first).toBe(second);
+    expect(second).toBe(third);
+  });
+
+  it("is deterministic for identical input and time", () => {
+    const input = [candidate({ resolvedAtISO: isoDaysBeforeNow(10) })];
+    expect(selectSpacedReviewTarget(input, NOW)).toBe(
+      selectSpacedReviewTarget(input, NOW),
+    );
+  });
+
+  it("defaults to the real current time when nowISO is omitted", () => {
+    // A misconception resolved far in the past is due under real "now" too.
+    expect(
+      selectSpacedReviewTarget([
+        candidate({ resolvedAtISO: "2000-01-01T00:00:00.000Z" }),
+      ]),
+    ).toBe("cache-is-ram");
+  });
+});
+
+describe("selectQuestionTargetCategory (10 priority merge)", () => {
+  it("verification wins when both are present", () => {
+    expect(
+      selectQuestionTargetCategory({
+        verifyMisconceptionCategory: "active-one",
+        spacedReviewCategory: "resolved-one",
+      }),
+    ).toBe("active-one");
+  });
+
+  it("falls back to spaced review when no verification target exists", () => {
+    expect(
+      selectQuestionTargetCategory({
+        verifyMisconceptionCategory: null,
+        spacedReviewCategory: "resolved-one",
+      }),
+    ).toBe("resolved-one");
+  });
+
+  it("null when neither applies — falls through to ordinary selection", () => {
+    expect(
+      selectQuestionTargetCategory({
+        verifyMisconceptionCategory: null,
+        spacedReviewCategory: null,
+      }),
+    ).toBeNull();
   });
 });

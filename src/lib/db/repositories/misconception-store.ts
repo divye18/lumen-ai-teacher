@@ -184,11 +184,14 @@ export function createMisconceptionStore(db: DbClient): MisconceptionStore {
         : [];
       if (v.evidenceEntry) evidence.push(v.evidenceEntry);
 
+      const wasResolved = existing.data.status === "RESOLVED";
       const patch: TablesUpdate<"misconceptions"> = {
         confidence: v.confidence,
         last_detected_at: new Date().toISOString(),
-        status:
-          existing.data.status === "RESOLVED" ? "ACTIVE" : existing.data.status,
+        status: wasResolved ? "ACTIVE" : existing.data.status,
+        // A relapse (spaced-review or otherwise) reactivates the row — its
+        // resolved_at must no longer claim it's currently resolved.
+        ...(wasResolved ? { resolved_at: null } : {}),
         ...(v.severity ? { severity: v.severity } : {}),
         metadata: { ...meta, detections: v.detections } as Json,
         evidence: evidence.slice(0, 50) as Json,

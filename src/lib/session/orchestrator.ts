@@ -30,6 +30,8 @@ import {
   evaluateMisconceptionResolution,
   misconceptionCategoriesInQuestion,
   selectVerificationTarget,
+  selectSpacedReviewTarget,
+  selectQuestionTargetCategory,
   type ExistingMisconception,
   type PersonalizationAdjustments,
   type ResolutionOutcome,
@@ -884,6 +886,29 @@ export function createTeachingOrchestrator(
             })),
         );
 
+        // 10 — spaced review: a RESOLVED misconception isn't permanently
+        // forgotten. Only computed when nothing needs live verification —
+        // verification (9.2) always takes priority over a spaced review, per
+        // `selectQuestionTargetCategory` below.
+        const spacedReviewCategory =
+          verifyMisconceptionCategory === null
+            ? selectSpacedReviewTarget(
+                data.misconceptions
+                  .filter((m) => m.status === "RESOLVED")
+                  .map((m) => ({
+                    id: m.id,
+                    category: m.category,
+                    status: m.status,
+                    resolvedAtISO: m.resolved_at,
+                    severity: m.severity,
+                  })),
+              )
+            : null;
+        const targetMisconceptionCategory = selectQuestionTargetCategory({
+          verifyMisconceptionCategory,
+          spacedReviewCategory,
+        });
+
         // Priority: deterministic structured assessment when the LLM is
         // unavailable and a safe structured question exists; otherwise the
         // free-form (LLM-evaluated) path; the deterministic free-form template
@@ -904,7 +929,7 @@ export function createTeachingOrchestrator(
                   .filter((q) => q.concept_key === engineConcept.key)
                   .map((q) => q.prompt),
                 preferFormat: personalization.targetFormatWeakness,
-                verifyMisconceptionCategory,
+                verifyMisconceptionCategory: targetMisconceptionCategory,
                 graph: buildTemplateGraphContext(
                   data.graphView,
                   engineConcept.key,
@@ -913,16 +938,24 @@ export function createTeachingOrchestrator(
             : null;
 
         // Learner-safe rationale: only surfaced when the picked question
-        // actually landed on the verification target (never forced, never
-        // named). Existing personalization note takes priority if present.
-        const verificationNote =
+        // actually landed on the target (never forced, never named).
+        // Existing personalization note takes priority if present. The
+        // wording distinguishes live verification from a spaced review
+        // without ever naming the misconception, its category, or its status.
+        const landedTargetCategory =
           structured &&
-          verifyMisconceptionCategory &&
+          targetMisconceptionCategory &&
           misconceptionCategoriesInQuestion(structured.question).includes(
-            verifyMisconceptionCategory,
+            targetMisconceptionCategory,
           )
-            ? "Let's try this from a different angle."
+            ? targetMisconceptionCategory
             : null;
+        const verificationNote = landedTargetCategory
+          ? verifyMisconceptionCategory &&
+            landedTargetCategory === verifyMisconceptionCategory
+            ? "Let's try this from a different angle."
+            : "Let's check this one again after some time."
+          : null;
 
         // Deterministic-assessment dead-end guard. With no LLM, free-form
         // answers can only ever be graded UNCERTAIN — so once the structured
@@ -1330,9 +1363,13 @@ export function createTeachingOrchestrator(
         };
       }
 
-      const existingForConcept = data.misconceptions.filter(
-        (m) => m.status !== "RESOLVED",
-      );
+      // 10 — includes RESOLVED rows (not just ACTIVE/IMPROVING) so a wrong
+      // answer that matches an already-RESOLVED misconception's category
+      // reactivates that SAME row through the existing strengthen() path
+      // instead of matchMisconception() finding no match and creating a
+      // duplicate. `resolutionCandidates` below re-filters to ACTIVE/
+      // IMPROVING, so 9.1's forward resolution loop is unaffected.
+      const existingForConcept = data.misconceptions;
       const existing: ExistingMisconception[] = existingForConcept.map((m) => ({
         id: m.id,
         category: m.category,

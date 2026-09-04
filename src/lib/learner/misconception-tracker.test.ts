@@ -61,6 +61,25 @@ describe("matchMisconception", () => {
     );
     expect(m).toBeNull();
   });
+
+  it("matches a RESOLVED row the same as any other status (10 — spaced-review relapse)", () => {
+    // matchMisconception is status-agnostic by design — the caller decides
+    // which rows to include. A wrong answer on a previously-RESOLVED
+    // misconception's category must still be found here, so the orchestrator
+    // can route it to strengthen() (reactivate) instead of record() (a
+    // duplicate row).
+    const resolved: ExistingMisconception[] = [
+      { ...existing[0], status: "RESOLVED" },
+    ];
+    const m = matchMisconception(
+      {
+        category: "page fault is a crash",
+        description: "thinks the process dies",
+      },
+      resolved,
+    );
+    expect(m?.existing.id).toBe("m1");
+  });
 });
 
 describe("planMisconceptionUpdates", () => {
@@ -109,6 +128,25 @@ describe("planMisconceptionUpdates", () => {
     expect(plan.strengthens[0].newDetections).toBe(2);
     expect(plan.strengthens[0].newConfidence).toBeGreaterThan(0.6);
     expect(plan.hasRepeated).toBe(true);
+  });
+
+  it("relapse on a RESOLVED row strengthens the existing row, never creates a duplicate (10)", () => {
+    const resolved: ExistingMisconception[] = [
+      { ...existing[0], status: "RESOLVED" },
+    ];
+    const plan = planMisconceptionUpdates({
+      candidates: [
+        {
+          category: "page fault is a crash",
+          description: "still thinks the process dies",
+          confidence: 0.7,
+        },
+      ],
+      existing: resolved,
+    });
+    expect(plan.strengthens).toHaveLength(1);
+    expect(plan.strengthens[0].id).toBe("m1");
+    expect(plan.creates).toHaveLength(0);
   });
 
   it("is not repeated on the very first detection of a fresh misconception", () => {

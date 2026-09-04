@@ -225,6 +225,93 @@ export function selectVerificationTarget(
   return normalizeCategory(sorted[0].category);
 }
 
+// ── spaced review (10) ───────────────────────────────────────────────────
+//
+// A RESOLVED misconception isn't permanently forgotten: after a fixed
+// elapsed period it becomes eligible to have a verification question
+// deliberately target it again. Purely a selection decision, like 9.2's
+// verification targeting above — it never touches status. Whether the
+// review holds (stays RESOLVED) or the learner relapses (RESOLVED -> ACTIVE)
+// is decided entirely by the EXISTING pipelines this answer then flows
+// through (9.1's resolution loop for a pass; `matchMisconception` /
+// `planMisconceptionUpdates` / `strengthen()` for a relapse) — nothing new
+// is introduced here.
+
+const DAY_MS = 86_400_000;
+/** How long a misconception must stay RESOLVED before it's due for review. */
+export const MISCONCEPTION_REVIEW_INTERVAL_MS = 7 * DAY_MS;
+
+export interface SpacedReviewCandidate {
+  id: string;
+  category: string;
+  status: ResolvableStatus;
+  /** ISO timestamp the row was marked RESOLVED, or `null` if never resolved. */
+  resolvedAtISO: string | null;
+  severity?: string | null;
+}
+
+/**
+ * Deterministically picks the single RESOLVED misconception (if any) that is
+ * due for spaced review this turn. `null` when nothing is eligible.
+ *
+ * Eligible: `status === "RESOLVED"`, `resolvedAtISO` present and parseable,
+ * and at least {@link MISCONCEPTION_REVIEW_INTERVAL_MS} old as of `nowISO`
+ * (defaults to the real current time — inject `nowISO` for deterministic
+ * tests, mirroring `learning-profile.ts`'s convention).
+ *
+ * Order: oldest `resolvedAtISO` first (the most overdue), then higher
+ * severity, then normalized category, then id — a stable tiebreak so the
+ * same input always yields the same target regardless of array order.
+ */
+export function selectSpacedReviewTarget(
+  candidates: SpacedReviewCandidate[],
+  nowISO?: string,
+): string | null {
+  const now = nowISO ? Date.parse(nowISO) : Date.now();
+
+  const eligible = candidates.filter((c) => {
+    if (c.status !== "RESOLVED") return false;
+    if (!c.resolvedAtISO) return false;
+    const resolvedAt = Date.parse(c.resolvedAtISO);
+    if (Number.isNaN(resolvedAt)) return false;
+    return now - resolvedAt >= MISCONCEPTION_REVIEW_INTERVAL_MS;
+  });
+  if (eligible.length === 0) return null;
+
+  const sorted = [...eligible].sort((a, b) => {
+    const ra = Date.parse(a.resolvedAtISO!);
+    const rb = Date.parse(b.resolvedAtISO!);
+    if (ra !== rb) return ra - rb;
+
+    const sev =
+      (VERIFICATION_SEVERITY_PRIORITY[a.severity ?? "MEDIUM"] ?? 2) -
+      (VERIFICATION_SEVERITY_PRIORITY[b.severity ?? "MEDIUM"] ?? 2);
+    if (sev !== 0) return sev;
+
+    const ca = normalizeCategory(a.category);
+    const cb = normalizeCategory(b.category);
+    if (ca !== cb) return ca < cb ? -1 : 1;
+
+    return a.id < b.id ? -1 : 1;
+  });
+
+  return normalizeCategory(sorted[0].category);
+}
+
+/**
+ * Priority merge for the one category the next question should target:
+ * live verification (9.2, an unresolved ACTIVE/IMPROVING misconception)
+ * always wins over spaced review (10, a due RESOLVED one) — a spaced review
+ * never bumps an already-selected verification target. `null` when neither
+ * applies, so the caller falls through to ordinary question selection.
+ */
+export function selectQuestionTargetCategory(input: {
+  verifyMisconceptionCategory: string | null;
+  spacedReviewCategory: string | null;
+}): string | null {
+  return input.verifyMisconceptionCategory ?? input.spacedReviewCategory;
+}
+
 export interface ResolutionOutcome {
   id: string;
   statusBefore: ResolvableStatus;
