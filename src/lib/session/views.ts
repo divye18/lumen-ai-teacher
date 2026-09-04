@@ -1,3 +1,4 @@
+import type { DiagnosticPendingView } from "./diagnostic-flow";
 import type { TeachingCitation } from "./citations";
 import type { VisualDirective } from "@/types/visuals";
 import type { ClientStructuredQuestion } from "@/lib/assessment/structured";
@@ -67,6 +68,22 @@ export interface SessionView {
   currentAction: string | null;
   progress: SessionProgress;
   mastery: MasterySnapshotEntry[];
+  /**
+   * A short diagnostic pre-assessment the learner must answer before the
+   * normal teaching loop starts. `null` when no diagnostic is pending — a
+   * returning learner with lesson-relevant mastery evidence, or one who
+   * already completed it. See `session/diagnostic-flow.ts`.
+   */
+  diagnostic: DiagnosticPendingView | null;
+}
+
+export interface DiagnosticCompletionView {
+  sessionId: string;
+  strongConceptKeys: string[];
+  developingConceptKeys: string[];
+  weakConceptKeys: string[];
+  /** True when this call found an already-COMPLETED diagnostic (idempotent replay). */
+  alreadyCompleted: boolean;
 }
 
 /** The sanitised teaching decision surfaced to the UI. */

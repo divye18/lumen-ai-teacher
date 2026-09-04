@@ -2,6 +2,7 @@ import "server-only";
 
 import type { LLMProvider } from "@/lib/ai/types";
 import {
+  createAssessmentStore,
   createInteractionStore,
   createLessonStore,
   createMasteryStore,
@@ -13,6 +14,12 @@ import {
   type LessonConceptRow,
   type LessonRow,
 } from "@/lib/db/repositories";
+import {
+  selectDiagnosticQuestionSet,
+  scoreDiagnosticQuestionSet,
+} from "@/lib/assessment/diagnostic";
+import { seedMasteryFromDiagnostic } from "@/lib/assessment/diagnostic-mastery";
+import type { CurrentConceptState } from "@/lib/learner/state-update";
 import type { InteractionType } from "@/lib/db/enums";
 import {
   LessonNotFoundError,
@@ -69,6 +76,7 @@ import {
   toClientStructured,
   structuredQuestionFromRow,
   structuredAnswerSchema,
+  type StructuredAnswer,
 } from "@/lib/assessment/structured";
 
 import {
@@ -79,6 +87,19 @@ import {
   currentStrategy,
   type SessionContextData,
 } from "./context";
+import {
+  buildDiagnosticAssessmentInput,
+  buildDiagnosticConceptsAndEdges,
+  buildMasteryUpsertInputs,
+  buildStoredDiagnosticState,
+  markDiagnosticCompleted,
+  needsDiagnostic,
+  parseStoredDiagnosticState,
+  resolveDiagnosticPhase,
+  toDiagnosticQuestionSet,
+  type DiagnosticGraphInput,
+  type DiagnosticLessonConcept,
+} from "./diagnostic-flow";
 import {
   deriveLearningEvent,
   deriveLearningIntelligence,
@@ -98,6 +119,7 @@ import {
 } from "./citations";
 import type {
   DecisionView,
+  DiagnosticCompletionView,
   EvaluationView,
   InteractionResultView,
   SessionProgress,
@@ -139,6 +161,15 @@ export interface TeachingOrchestrator {
     answerText: string;
     responseTimeMs?: number | null;
   }): Promise<Result<InteractionResultView>>;
+  /**
+   * Grade and apply a completed diagnostic pre-assessment (see
+   * `session/diagnostic-flow.ts`). Idempotent: calling this again after
+   * completion returns the stored result without re-grading or re-seeding.
+   */
+  submitDiagnostic(input: {
+    sessionId: string;
+    answers: { conceptKey: string; answer: StructuredAnswer }[];
+  }): Promise<Result<DiagnosticCompletionView>>;
 }
 
 const ACTION_TO_INTERACTION_TYPE: Record<string, InteractionType> = {
@@ -257,6 +288,7 @@ export function createTeachingOrchestrator(
   const mastery = createMasteryStore(deps.db);
   const misconceptions = createMisconceptionStore(deps.db);
   const interactions = createInteractionStore(deps.db);
+  const assessments = createAssessmentStore(deps.db);
   const engine = createTeachingEngine({ llm: deps.llm });
 
   /**
@@ -592,6 +624,11 @@ export function createTeachingOrchestrator(
         }
       > | null) ?? {};
 
+    const storedDiagnostic = parseStoredDiagnosticState(
+      (session.mastery_snapshot as Record<string, unknown> | null)
+        ?.__diagnostic,
+    );
+
     return ok({
       sessionId: session.id,
       lessonId: session.lesson_id,
@@ -613,7 +650,86 @@ export function createTeachingOrchestrator(
           status: s?.status ?? c.status,
         };
       }),
+      diagnostic: resolveDiagnosticPhase(storedDiagnostic).pending,
     });
+  }
+
+  /**
+   * CASE 1 (new learner / no lesson-scoped mastery evidence): builds a
+   * diagnostic question set scoped to this lesson's concepts and graph,
+   * persists an `assessments` envelope row (`assessment_type = 'DIAGNOSTIC'`)
+   * and the pending question set on the session, and switches
+   * `current_action` to `"DIAGNOSTIC"`. Returns `false` (falls through to
+   * normal teaching) when the learner already has lesson-scoped evidence, or
+   * when no safe diagnostic question could be selected for this lesson.
+   */
+  async function beginDiagnosticIfNeeded(
+    session: LearningSessionRow,
+    lesson: LessonRow,
+    lessonConceptRows: LessonConceptRow[],
+  ): Promise<LearningSessionRow | null> {
+    const lessonConcepts: DiagnosticLessonConcept[] = lessonConceptRows.map(
+      (c) => ({
+        conceptId: c.concept_id,
+        conceptKey: c.concept_key,
+        title: c.title,
+        summary: c.summary,
+      }),
+    );
+
+    const masteryRes = await mastery.listForUser(deps.userId);
+    const evidence = (masteryRes.ok ? masteryRes.value : []).map((m) => ({
+      conceptId: m.concept_id,
+      attemptCount: m.attempt_count,
+    }));
+
+    if (!needsDiagnostic(lessonConcepts, evidence)) return null;
+
+    let graphInput: DiagnosticGraphInput | undefined;
+    try {
+      const graphRes = await getKnowledgeGraph(deps.db, deps.userId, {
+        lessonId: lesson.id,
+      });
+      if (graphRes.ok) {
+        graphInput = {
+          nodes: graphRes.value.nodes.map((n) => ({
+            id: n.id,
+            conceptKey: n.conceptKey,
+          })),
+          edges: graphRes.value.edges.map((e) => ({
+            source: e.source,
+            target: e.target,
+            type: e.type,
+          })),
+        };
+      }
+    } catch {
+      graphInput = undefined;
+    }
+
+    const { concepts, edges } = buildDiagnosticConceptsAndEdges(
+      lessonConcepts,
+      graphInput,
+    );
+    const set = selectDiagnosticQuestionSet(concepts, edges);
+    if (set.items.length === 0) return null; // nothing safe to ask — teach immediately
+
+    const assessmentRes = await assessments.create(
+      buildDiagnosticAssessmentInput(deps.userId, session.id),
+    );
+    if (!assessmentRes.ok) return null; // best-effort — fall through to teaching
+
+    const now = new Date().toISOString();
+    const stored = buildStoredDiagnosticState(assessmentRes.value.id, set, now);
+    const existingSnapshot =
+      (session.mastery_snapshot as Record<string, unknown> | null) ?? {};
+
+    const updated = await sessions.updateTeaching({
+      id: session.id,
+      currentAction: "DIAGNOSTIC",
+      masterySnapshot: { ...existingSnapshot, __diagnostic: stored },
+    });
+    return updated.ok ? updated.value : null;
   }
 
   return {
@@ -694,7 +810,13 @@ export function createTeachingOrchestrator(
       await lessons.update({ id: lesson.id, status: "ACTIVE" });
       await lessons.setConceptStatus(first.id, "TEACHING");
 
-      return buildSessionView(withTeaching.value);
+      const withDiagnostic = await beginDiagnosticIfNeeded(
+        withTeaching.value,
+        lesson,
+        conceptsRes.value,
+      );
+
+      return buildSessionView(withDiagnostic ?? withTeaching.value);
     },
 
     async getNextStep(input) {
@@ -1770,6 +1892,110 @@ export function createTeachingOrchestrator(
         intelligence: intelligenceView,
         learningEvent: learningEventView,
         liveStatus: resultLiveStatus,
+      });
+    },
+
+    async submitDiagnostic(input) {
+      const sessionRes = await sessions.get(input.sessionId);
+      if (!sessionRes.ok) return sessionRes;
+      const session = sessionRes.value;
+      if (session.user_id !== deps.userId) {
+        return err(new SessionNotFoundError(input.sessionId));
+      }
+
+      const snap =
+        (session.mastery_snapshot as Record<string, unknown> | null) ?? {};
+      const stored = parseStoredDiagnosticState(snap.__diagnostic);
+
+      // Nothing pending, or already completed — idempotent replay. Never
+      // re-grades, re-seeds mastery, or repeats the diagnostic.
+      if (!stored || stored.status === "COMPLETED") {
+        const summary = stored?.summary;
+        return ok({
+          sessionId: session.id,
+          strongConceptKeys: summary?.strong ?? [],
+          developingConceptKeys: summary?.developing ?? [],
+          weakConceptKeys: summary?.weak ?? [],
+          alreadyCompleted: true,
+        });
+      }
+
+      if (!session.lesson_id) {
+        return err(new SessionNotFoundError(input.sessionId));
+      }
+      const conceptsRes = await lessons.listConcepts(session.lesson_id);
+      if (!conceptsRes.ok) return conceptsRes;
+      const conceptIdByKey = new Map(
+        conceptsRes.value.map((c) => [c.concept_key, c.concept_id]),
+      );
+
+      const set = toDiagnosticQuestionSet(stored);
+      const result = scoreDiagnosticQuestionSet(set, input.answers);
+
+      // Existing mastery, scoped to this lesson's concepts only — never a
+      // global read. Diagnostic evidence can only raise this floor.
+      const masteryRes = await mastery.listForUser(deps.userId);
+      const masteryByConceptId = new Map(
+        (masteryRes.ok ? masteryRes.value : []).map((m) => [m.concept_id, m]),
+      );
+      const existingByConceptKey: Record<string, CurrentConceptState | null> =
+        {};
+      for (const c of conceptsRes.value) {
+        const m = c.concept_id ? masteryByConceptId.get(c.concept_id) : null;
+        existingByConceptKey[c.concept_key] = m
+          ? {
+              masteryScore: m.mastery_score,
+              confidenceScore: m.confidence_score,
+              attemptCount: m.attempt_count,
+              correctCount: m.correct_count,
+              incorrectCount: m.incorrect_count,
+              misconceptionCount: m.misconception_count,
+              preferredStrategy:
+                m.preferred_strategy as CurrentConceptState["preferredStrategy"],
+            }
+          : null;
+      }
+
+      // Never routed through applyInteractionOutcome — diagnostic evidence
+      // never touches ordinary teaching-interaction bookkeeping and never
+      // creates/strengthens a confirmed misconception.
+      const seeded = seedMasteryFromDiagnostic({
+        result,
+        existingByConceptKey,
+      });
+      const upserts = buildMasteryUpsertInputs(
+        deps.userId,
+        conceptIdByKey,
+        seeded.seeds,
+      );
+      for (const upsertInput of upserts) {
+        await mastery.upsert(upsertInput);
+      }
+
+      const now = new Date().toISOString();
+      await assessments.complete({
+        id: stored.assessmentId,
+        status: "COMPLETED",
+        score:
+          result.strongConceptKeys.length +
+          result.developingConceptKeys.length * 0.5,
+        maxScore: set.items.length,
+        completedAt: now,
+      });
+
+      const completedState = markDiagnosticCompleted(stored, result, now);
+      await sessions.updateTeaching({
+        id: session.id,
+        currentAction: null,
+        masterySnapshot: { ...snap, __diagnostic: completedState },
+      });
+
+      return ok({
+        sessionId: session.id,
+        strongConceptKeys: result.strongConceptKeys,
+        developingConceptKeys: result.developingConceptKeys,
+        weakConceptKeys: result.weakConceptKeys,
+        alreadyCompleted: false,
       });
     },
   };

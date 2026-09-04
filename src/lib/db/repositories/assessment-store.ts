@@ -1,12 +1,14 @@
 import type { Json } from "@/lib/db/types";
 import { ok, type Result } from "@/lib/result";
 
-import type { Tables, TablesInsert } from "../types";
+import type { Tables, TablesInsert, TablesUpdate } from "../types";
 import {
   addAssessmentQuestionSchema,
+  completeAssessmentSchema,
   createAssessmentSchema,
   recordAssessmentAnswerSchema,
   type AddAssessmentQuestionInput,
+  type CompleteAssessmentInput,
   type CreateAssessmentInput,
   type RecordAssessmentAnswerInput,
 } from "../schemas";
@@ -46,6 +48,8 @@ export interface AssessmentStore {
   recordAnswer(
     input: RecordAssessmentAnswerInput,
   ): Promise<Result<AssessmentAnswerRow>>;
+  /** Mark an assessment COMPLETED/ABANDONED with a final score. */
+  complete(input: CompleteAssessmentInput): Promise<Result<AssessmentRow>>;
 }
 
 export function createAssessmentStore(db: DbClient): AssessmentStore {
@@ -133,6 +137,28 @@ export function createAssessmentStore(db: DbClient): AssessmentStore {
         await db
           .from("assessment_answers")
           .insert(payload)
+          .select("*")
+          .single(),
+      );
+    },
+
+    async complete(input) {
+      const parsed = parseInput(completeAssessmentSchema, input);
+      if (!parsed.ok) return parsed;
+      const v = parsed.value;
+
+      const payload: TablesUpdate<"assessments"> = {
+        status: v.status,
+        score: v.score ?? null,
+        max_score: v.maxScore ?? null,
+        completed_at: v.completedAt ?? new Date().toISOString(),
+      };
+
+      return rowResult(
+        await db
+          .from("assessments")
+          .update(payload)
+          .eq("id", v.id)
           .select("*")
           .single(),
       );

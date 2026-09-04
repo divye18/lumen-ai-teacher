@@ -239,6 +239,17 @@ export type RecordAssessmentAnswerInput = z.infer<
   typeof recordAssessmentAnswerSchema
 >;
 
+export const completeAssessmentSchema = z.object({
+  id: uuidSchema,
+  status: assessmentStatusSchema,
+  /** `assessments.score`/`max_score` are plain non-negative numbers (e.g. a
+   * count out of a total), not the 0..1 `unitScoreSchema` scale. */
+  score: z.number().min(0).nullish(),
+  maxScore: z.number().min(0).nullish(),
+  completedAt: isoDateTimeSchema.optional(),
+});
+export type CompleteAssessmentInput = z.infer<typeof completeAssessmentSchema>;
+
 // ── documents + chunks (RAG) ────────────────────────────────────────────────
 export const createDocumentSchema = z.object({
   userId: uuidSchema,

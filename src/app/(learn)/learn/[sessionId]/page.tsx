@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 
+import { DiagnosticGate } from "@/components/teaching/diagnostic-gate";
 import { TeachingRoom } from "@/components/teaching/teaching-room";
 import { requireUser } from "@/lib/auth/current-user";
 import { getSupabaseServerClient } from "@/lib/db/server";
@@ -40,6 +41,15 @@ export default async function LearnPage({
   }
 
   if (!data.ok) notFound();
+
+  if (data.value.session.diagnostic) {
+    return (
+      <DiagnosticGate
+        sessionId={sessionId}
+        items={data.value.session.diagnostic.items}
+      />
+    );
+  }
 
   return (
     <TeachingRoom

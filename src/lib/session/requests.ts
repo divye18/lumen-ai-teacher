@@ -2,6 +2,8 @@ import { z } from "zod";
 
 import { uuidSchema } from "@/lib/db/schemas";
 import { teachingStyleSchema } from "@/lib/db/enums";
+import { structuredAnswerSchema } from "@/lib/assessment/structured/contracts";
+import { DIAGNOSTIC_MAX_QUESTIONS } from "@/lib/assessment/diagnostic";
 
 /** Validated bodies for the teaching-loop API routes. `userId` always comes from auth. */
 
@@ -37,4 +39,20 @@ export const submitInteractionRequestSchema = z.object({
 });
 export type SubmitInteractionRequest = z.infer<
   typeof submitInteractionRequestSchema
+>;
+
+export const submitDiagnosticRequestSchema = z.object({
+  sessionId: uuidSchema,
+  answers: z
+    .array(
+      z.object({
+        conceptKey: z.string().min(1).max(80),
+        answer: structuredAnswerSchema,
+      }),
+    )
+    .min(1)
+    .max(DIAGNOSTIC_MAX_QUESTIONS),
+});
+export type SubmitDiagnosticRequest = z.infer<
+  typeof submitDiagnosticRequestSchema
 >;
