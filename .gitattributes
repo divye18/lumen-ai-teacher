@@ -1,0 +1,13 @@
+# Normalize line endings: the repo is LF-only. Prevents core.autocrlf on
+# Windows checkouts from turning tracked source into CRLF, which otherwise
+# makes `prettier --check` (endOfLine: "lf") fail on a fresh working tree.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary

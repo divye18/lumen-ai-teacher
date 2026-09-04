@@ -41,12 +41,12 @@ export function AdaptiveTransition({
 
   const strategyChanged =
     previousStrategy != null && previousStrategy !== decision.strategy;
-  const fromLabel = previousAction
-    ? actionLabel(previousAction)
-    : actionLabel(decision.action);
-  const toLabel = decision.nextAction
-    ? actionLabel(decision.nextAction)
-    : actionLabel(decision.action);
+  const fromLabel = previousAction ? actionLabel(previousAction) : null;
+  const toLabel = actionLabel(decision.action);
+  const approachChanged = fromLabel != null && fromLabel !== toLabel;
+  // Always show something: the approach pair when it moved, otherwise fall back
+  // to the representation pair, otherwise nothing.
+  const showApproach = approachChanged;
 
   return (
     <motion.div
@@ -65,22 +65,32 @@ export function AdaptiveTransition({
         {headline}
       </p>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <TransitionPair
-          caption="Approach"
-          from={fromLabel}
-          to={toLabel}
-          reduce={reduce}
-        />
-        {strategyChanged ? (
-          <TransitionPair
-            caption="Representation"
-            from={strategyLabel(previousStrategy)}
-            to={strategyLabel(decision.strategy)}
-            reduce={reduce}
-          />
-        ) : null}
-      </div>
+      {showApproach || strategyChanged ? (
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          {showApproach ? (
+            <TransitionPair
+              caption="Approach"
+              from={fromLabel as string}
+              to={toLabel}
+              reduce={reduce}
+            />
+          ) : null}
+          {strategyChanged ? (
+            <TransitionPair
+              caption="Representation"
+              from={strategyLabel(previousStrategy)}
+              to={strategyLabel(decision.strategy)}
+              reduce={reduce}
+            />
+          ) : null}
+        </div>
+      ) : (
+        <p className="mt-3 text-[12px] text-[var(--color-ink-muted)]">
+          Staying with{" "}
+          <span className="font-medium text-[var(--color-ink)]">{toLabel}</span>{" "}
+          on this concept.
+        </p>
+      )}
 
       {decision.whyThisNext ? (
         <p className="mt-4 text-[12px] leading-relaxed text-[var(--color-ink-muted)]">

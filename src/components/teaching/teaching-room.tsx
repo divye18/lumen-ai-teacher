@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { motion, useReducedMotion } from "framer-motion";
 
-import { AdaptiveTransition } from "@/components/learning/adaptive-transition";
 import { LearningSignalCard } from "@/components/learning/learning-signal-card";
 import { WhyNextCard } from "@/components/learning/why-next-card";
 import { TeachingRoomMap } from "@/components/graph/teaching-room-map";
@@ -21,7 +20,7 @@ import { VisualCanvas } from "@/components/visuals/visual-canvas";
 import { VoiceControls } from "@/components/voice/voice-controls";
 import { CaptionTrack } from "@/components/voice/caption-track";
 import { useVoiceController } from "@/components/voice/use-voice-controller";
-import { Button, LinkButton } from "@/components/ui/button";
+import { LinkButton } from "@/components/ui/button";
 import { ErrorState, InlineSpinner } from "@/components/ui/states";
 import { LumenWordmark } from "@/components/ui/lumen-mark";
 import { ThemeToggle } from "@/components/ui/theme";
@@ -30,7 +29,7 @@ import type { KnowledgeGraphView } from "@/lib/graph";
 import { apiFetch } from "@/lib/ui/api-client";
 import { actionLabel } from "@/lib/ui/learning-presentation";
 import { buildSessionEvents } from "@/lib/ui/session-events";
-import { presenceForContext } from "@/lib/teacher/presence";
+import { deriveTeachingStage } from "@/lib/teaching/teaching-stage";
 import { masteryBand } from "@/lib/teaching/mastery";
 import {
   trajectoryFromResults,
@@ -45,13 +44,10 @@ import type {
 import { cn } from "@/lib/ui/cn";
 
 type Phase =
-  | "loading"
-  | "teaching"
-  | "question"
-  | "result"
-  | "transition"
-  | "complete"
-  | "error";
+  "loading" | "teaching" | "question" | "result" | "complete" | "error";
+
+/** ms between the reveal beats of the post-answer sequence. */
+const RESULT_BEAT_MS = [1400, 1700];
 
 interface StepResponse {
   ok: true;
@@ -115,6 +111,10 @@ export function TeachingRoom({
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [voiceAnswer, setVoiceAnswer] = useState<string | null>(null);
   const [elapsedSec, setElapsedSec] = useState(0);
+  /** How much of the current explanation has been revealed (drives presence). */
+  const [teachingRevealed, setTeachingRevealed] = useState(false);
+  /** Which beat of the post-answer sequence is showing (0..2). */
+  const [resultBeat, setResultBeat] = useState(0);
   const [answerLog, setAnswerLog] = useState<AnswerLogEntry[]>([]);
   const [graphState, setGraphState] = useState<KnowledgeGraphView | null>(
     graph,
@@ -202,6 +202,8 @@ export function TeachingRoom({
     const s = res.data.step;
     setStep(s);
     setResult(null);
+    setResultBeat(0);
+    setTeachingRevealed(false);
     setDecisionHistory((h) => [...h, s.decision]);
     setSnapshot((prev) => ({ ...prev, mode: s.decision.action }));
 
@@ -242,6 +244,24 @@ export function TeachingRoom({
     return () => window.clearTimeout(id);
   }, [autoAdvanceTick, reduce]);
 
+  // Post-answer sequence: reveal the evaluation, then the learner-model change,
+  // then the adaptation — one beat at a time so it reads as one teacher moment.
+  // State only changes from the timer callbacks (reduced motion is handled by
+  // deriving `effectiveBeat` at render, below).
+  useEffect(() => {
+    if (phase !== "result" || reduce) return;
+    const timers: number[] = [];
+    let at = 0;
+    RESULT_BEAT_MS.forEach((gap, i) => {
+      at += gap;
+      timers.push(
+        window.setTimeout(() => setResultBeat((b) => Math.max(b, i + 1)), at),
+      );
+    });
+    return () => timers.forEach((t) => window.clearTimeout(t));
+  }, [phase, reduce, result]);
+  const effectiveBeat = reduce ? 2 : resultBeat;
+
   // Speak teaching content once per step when voice is on.
   useEffect(() => {
     if (!voiceEnabled || phase !== "teaching" || !step?.content) return;
@@ -272,14 +292,19 @@ export function TeachingRoom({
         }),
       },
     );
-    setBusy(false);
     voice.markProcessingDone();
     if (!res.ok) {
+      setBusy(false);
       setErrorMsg(res.error.message);
       return;
     }
     const r = res.data.result;
+    // Move to the result phase before the non-critical session refresh so the
+    // presence never flickers back to "checking" between the two.
     setResult(r);
+    setResultBeat(0);
+    setPhase("result");
+    setBusy(false);
     setResults((prev) => [...prev, r]);
     setDecisionHistory((h) => [...h, r.nextDecision]);
     setAnswerLog((prev) => [
@@ -315,17 +340,7 @@ export function TeachingRoom({
       };
     });
     await refreshSession();
-    setPhase("result");
     if (voiceEnabled) voice.speak(r.evaluation.feedback);
-  }
-
-  function beginTransition() {
-    voice.stopSpeaking();
-    if (!result) {
-      void loadStep();
-      return;
-    }
-    setPhase("transition");
   }
 
   function toContinue() {
@@ -379,13 +394,20 @@ export function TeachingRoom({
     result?.evaluation.classification ??
     results[results.length - 1]?.evaluation.classification ??
     null;
-  const presence = presenceForContext({
+
+  // One coherent read of "what is Lumen doing right now" — drives the presence
+  // orb, the status line, and the loading copy from the same source.
+  const teachingStage = deriveTeachingStage({
     phase,
-    decisionAction: activeDecision?.action ?? null,
+    busy,
+    action: activeDecision?.action ?? null,
+    revealComplete: teachingRevealed,
+    resultBeat: effectiveBeat,
+    classification: lastClassification,
+    firstLoad: step === null,
     voiceState: voiceEnabled ? voice.state : undefined,
-    lastClassification,
-    speaking: voice.state === "SPEAKING",
   });
+  const presence = teachingStage.presence;
 
   const visual = phase === "teaching" ? (step?.content?.visual ?? null) : null;
   const masteryPct = Math.round(panelSnapshot.masteryPoints);
@@ -429,6 +451,12 @@ export function TeachingRoom({
         <aside className="flex flex-col gap-4 lg:sticky lg:top-20 lg:h-fit">
           <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
             <TeacherPresence state={presence} level={voice.level} />
+            <p
+              className="mt-3 text-center text-[11px] leading-snug text-[var(--color-ink-muted)]"
+              aria-live="polite"
+            >
+              {teachingStage.statusLine}
+            </p>
           </div>
           {voiceEnabled && voice.capabilities.anyVoice ? (
             <p className="px-1 text-[11px] leading-snug text-[var(--color-ink-faint)]">
@@ -464,7 +492,7 @@ export function TeachingRoom({
           <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5 sm:p-6">
             {phase === "loading" ? (
               <div className="flex items-center gap-3 py-16">
-                <InlineSpinner label="Lumen is preparing the next step…" />
+                <InlineSpinner label={`${teachingStage.statusLine}…`} />
               </div>
             ) : null}
 
@@ -493,10 +521,12 @@ export function TeachingRoom({
                     action={step.decision.action}
                   />
                   <TeachingContent
+                    key={`${step.content.conceptKey}:${step.decision.action}:${step.content.title}`}
                     content={step.content}
                     citations={step.citations}
                     onContinue={toContinue}
                     continuing={busy}
+                    onRevealChange={setTeachingRevealed}
                     hideVisual
                   />
                 </>
@@ -560,31 +590,21 @@ export function TeachingRoom({
                   ) : null}
                   <EvaluationResult
                     result={result}
-                    onContinue={beginTransition}
+                    onContinue={toContinue}
+                    onSkip={() => setResultBeat(2)}
                     continuing={busy}
+                    beat={effectiveBeat}
+                    previousStrategy={previousDecision?.strategy ?? null}
+                    previousAction={previousDecision?.action ?? null}
+                    headline={transitionHeadline(result)}
                   />
-                  {currentTrajectory && currentTrajectory.points.length >= 2 ? (
+                  {effectiveBeat >= 1 &&
+                  currentTrajectory &&
+                  currentTrajectory.points.length >= 2 ? (
                     <div className="mt-5">
                       <MasteryTrajectoryChart trajectory={currentTrajectory} />
                     </div>
                   ) : null}
-                </>
-              ) : null}
-
-              {phase === "transition" && result ? (
-                <>
-                  <AdaptiveTransition
-                    headline={transitionHeadline(result)}
-                    decision={result.nextDecision}
-                    previousStrategy={previousDecision?.strategy ?? null}
-                    previousAction={previousDecision?.action ?? null}
-                    onDone={toContinue}
-                  />
-                  <div className="mt-4 flex justify-end">
-                    <Button variant="ghost" size="sm" onClick={toContinue}>
-                      Skip
-                    </Button>
-                  </div>
                 </>
               ) : null}
 
@@ -619,7 +639,7 @@ export function TeachingRoom({
 
         {/* Right rail: learning signal + timeline + live map */}
         <aside className="flex flex-col gap-4 lg:sticky lg:top-20 lg:max-h-[calc(100svh-6rem)] lg:overflow-y-auto lg:pb-4">
-          {(phase === "result" || phase === "transition") && result ? (
+          {phase === "result" && result ? (
             <LearningSignalCard result={result} />
           ) : null}
           <LearnerStatePanel

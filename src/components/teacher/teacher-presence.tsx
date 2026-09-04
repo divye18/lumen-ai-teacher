@@ -153,6 +153,24 @@ export function TeacherPresence({
             strokeWidth="1"
           />
 
+          {/* One-shot ripple whenever the teacher's state changes — a beat that
+              signals "Lumen just shifted what it's doing", not a loop. */}
+          {!reduce ? (
+            <motion.circle
+              key={state}
+              cx="100"
+              cy="100"
+              r="34"
+              fill="none"
+              stroke={visual.color}
+              strokeWidth="1.5"
+              initial={{ scale: 1, opacity: 0.55 }}
+              animate={{ scale: 2.6, opacity: 0 }}
+              transition={{ duration: 0.9, ease: "easeOut" }}
+              style={{ transformOrigin: "100px 100px" }}
+            />
+          ) : null}
+
           {/* Speaking pulse dots */}
           {state === "TEACHING" && !reduce
             ? [0, 1, 2].map((i) => (
