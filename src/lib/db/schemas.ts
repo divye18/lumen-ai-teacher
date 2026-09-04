@@ -247,6 +247,14 @@ export const completeAssessmentSchema = z.object({
   score: z.number().min(0).nullish(),
   maxScore: z.number().min(0).nullish(),
   completedAt: isoDateTimeSchema.optional(),
+  /**
+   * Compare-and-swap guard: when set, the update only applies to a row whose
+   * CURRENT `status` still matches this value (`WHERE id = ... AND status =
+   * ...`). Lets a caller safely "claim" a row exactly once under concurrent
+   * requests — a losing racer's update matches zero rows and gets a
+   * `NOT_FOUND` result instead of silently double-applying a completion.
+   */
+  expectedCurrentStatus: assessmentStatusSchema.optional(),
 });
 export type CompleteAssessmentInput = z.infer<typeof completeAssessmentSchema>;
 

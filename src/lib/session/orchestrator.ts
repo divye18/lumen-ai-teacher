@@ -285,6 +285,26 @@ interface LoadedSession {
   currentConceptId: string | null;
 }
 
+/** The idempotent-replay response for an already-completed (or never
+ * started) diagnostic — used both for a genuine replay and when this
+ * request lost the completion race (see `submitDiagnostic`). */
+function alreadyCompletedDiagnosticResult(
+  sessionId: string,
+  stored: ReturnType<typeof parseStoredDiagnosticState>,
+): DiagnosticCompletionView {
+  const summary = stored?.summary
+    ? buildDiagnosticSummaryView(stored.summary)
+    : {
+        strong: [],
+        developing: [],
+        weak: [],
+        mostImportantGap: null,
+        adaptationNote:
+          "I don't have enough evidence yet, so I'll teach from the beginning and adjust as we go.",
+      };
+  return { sessionId, summary, alreadyCompleted: true };
+}
+
 export function createTeachingOrchestrator(
   deps: OrchestratorDeps,
 ): TeachingOrchestrator {
@@ -1928,21 +1948,7 @@ export function createTeachingOrchestrator(
             currentAction: null,
           });
         }
-        const summaryView = stored?.summary
-          ? buildDiagnosticSummaryView(stored.summary)
-          : {
-              strong: [],
-              developing: [],
-              weak: [],
-              mostImportantGap: null,
-              adaptationNote:
-                "I don't have enough evidence yet, so I'll teach from the beginning and adjust as we go.",
-            };
-        return ok({
-          sessionId: session.id,
-          summary: summaryView,
-          alreadyCompleted: true,
-        });
+        return ok(alreadyCompletedDiagnosticResult(session.id, stored));
       }
 
       // A still-pending diagnostic must actually be answered — an empty
@@ -1988,6 +1994,53 @@ export function createTeachingOrchestrator(
           : null;
       }
 
+      // The most important prerequisite/knowledge gap, using only real graph
+      // evidence — never fabricated. A best-effort read: a graph failure
+      // just means no gap is surfaced. Read-only, so safe before the claim.
+      let gap: StoredDiagnosticGap | null = null;
+      try {
+        const graphRes = await getKnowledgeGraph(deps.db, deps.userId, {
+          lessonId: session.lesson_id,
+        });
+        if (graphRes.ok) {
+          gap = findMostImportantGap(result, graphRes.value);
+        }
+      } catch {
+        gap = null;
+      }
+
+      // CONCURRENCY GUARD: atomically claim this diagnostic (IN_PROGRESS ->
+      // COMPLETED) BEFORE writing any mastery. `assessments.complete`'s
+      // `expectedCurrentStatus` makes this a compare-and-swap on the DB row —
+      // two racing submissions of the same final question (double-click,
+      // retry-after-timeout) can both reach this point, but only one UPDATE
+      // matches a still-IN_PROGRESS row. The loser sees `!claim.ok` and backs
+      // out without touching mastery, never double-writing it.
+      const now = new Date().toISOString();
+      const claim = await assessments.complete({
+        id: stored.assessmentId,
+        status: "COMPLETED",
+        score:
+          result.strongConceptKeys.length +
+          result.developingConceptKeys.length * 0.5,
+        maxScore: set.items.length,
+        completedAt: now,
+        expectedCurrentStatus: "IN_PROGRESS",
+      });
+      if (!claim.ok) {
+        // Lost the race — re-read the session so the response reflects the
+        // winner's completed state, not this request's (unwritten) result.
+        const freshRes = await sessions.get(input.sessionId);
+        const freshSession = freshRes.ok ? freshRes.value : session;
+        const freshSnap =
+          (freshSession.mastery_snapshot as Record<string, unknown> | null) ??
+          {};
+        const freshStored = parseStoredDiagnosticState(freshSnap.__diagnostic);
+        return ok(
+          alreadyCompletedDiagnosticResult(freshSession.id, freshStored),
+        );
+      }
+
       // Never routed through applyInteractionOutcome — diagnostic evidence
       // never touches ordinary teaching-interaction bookkeeping and never
       // creates/strengthens a confirmed misconception.
@@ -2003,32 +2056,6 @@ export function createTeachingOrchestrator(
       for (const upsertInput of upserts) {
         await mastery.upsert(upsertInput);
       }
-
-      // The most important prerequisite/knowledge gap, using only real graph
-      // evidence and the mastery just seeded above — never fabricated. A
-      // best-effort read: a graph failure just means no gap is surfaced.
-      let gap: StoredDiagnosticGap | null = null;
-      try {
-        const graphRes = await getKnowledgeGraph(deps.db, deps.userId, {
-          lessonId: session.lesson_id,
-        });
-        if (graphRes.ok) {
-          gap = findMostImportantGap(result, graphRes.value);
-        }
-      } catch {
-        gap = null;
-      }
-
-      const now = new Date().toISOString();
-      await assessments.complete({
-        id: stored.assessmentId,
-        status: "COMPLETED",
-        score:
-          result.strongConceptKeys.length +
-          result.developingConceptKeys.length * 0.5,
-        maxScore: set.items.length,
-        completedAt: now,
-      });
 
       const completedState = markDiagnosticCompleted(stored, result, gap, now);
       await sessions.updateTeaching({

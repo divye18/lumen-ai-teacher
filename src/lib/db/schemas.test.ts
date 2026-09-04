@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  completeAssessmentSchema,
   conceptMasteryUpsertSchema,
   createConceptRelationshipSchema,
   learnerProfileUpsertSchema,
@@ -20,6 +21,39 @@ describe("supported language validation", () => {
 
   it.each(["fr", "en-US", "", "EN"])("rejects %s", (lang) => {
     expect(supportedLanguageSchema.safeParse(lang).success).toBe(false);
+  });
+});
+
+describe("complete assessment — compare-and-swap guard", () => {
+  const ASSESSMENT = "a0000000-0000-0000-0000-000000000001";
+
+  it("accepts a completion with no CAS guard (unconditional update)", () => {
+    const r = completeAssessmentSchema.safeParse({
+      id: ASSESSMENT,
+      status: "COMPLETED",
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("accepts a completion guarded by expectedCurrentStatus", () => {
+    const r = completeAssessmentSchema.safeParse({
+      id: ASSESSMENT,
+      status: "COMPLETED",
+      score: 3,
+      maxScore: 8,
+      expectedCurrentStatus: "IN_PROGRESS",
+    });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.expectedCurrentStatus).toBe("IN_PROGRESS");
+  });
+
+  it("rejects a nonsense expectedCurrentStatus value", () => {
+    const r = completeAssessmentSchema.safeParse({
+      id: ASSESSMENT,
+      status: "COMPLETED",
+      expectedCurrentStatus: "NOT_A_REAL_STATUS",
+    });
+    expect(r.success).toBe(false);
   });
 });
 

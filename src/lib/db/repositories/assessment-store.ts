@@ -154,14 +154,12 @@ export function createAssessmentStore(db: DbClient): AssessmentStore {
         completed_at: v.completedAt ?? new Date().toISOString(),
       };
 
-      return rowResult(
-        await db
-          .from("assessments")
-          .update(payload)
-          .eq("id", v.id)
-          .select("*")
-          .single(),
-      );
+      let query = db.from("assessments").update(payload).eq("id", v.id);
+      if (v.expectedCurrentStatus !== undefined) {
+        query = query.eq("status", v.expectedCurrentStatus);
+      }
+
+      return rowResult(await query.select("*").single());
     },
   };
 }
