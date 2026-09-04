@@ -23,6 +23,10 @@ import { VoiceControls } from "@/components/voice/voice-controls";
 import { CaptionTrack } from "@/components/voice/caption-track";
 import { useVoiceController } from "@/components/voice/use-voice-controller";
 import type { VoiceCloudStatus } from "@/lib/voice/types";
+import {
+  routeVoiceTranscript,
+  type VoiceListenTarget,
+} from "@/lib/ui/voice-listen-target";
 import { LinkButton } from "@/components/ui/button";
 import { ErrorState, InlineSpinner } from "@/components/ui/states";
 import { LumenWordmark } from "@/components/ui/lumen-mark";
@@ -117,6 +121,17 @@ export function TeachingRoom({
 
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [voiceAnswer, setVoiceAnswer] = useState<string | null>(null);
+  const [askLumenTranscript, setAskLumenTranscript] = useState<string | null>(
+    null,
+  );
+  /**
+   * VoiceController has exactly one registered transcript handler; two
+   * surfaces (the question panel, Ask Lumen) can start listening, but only
+   * one mic session is ever active. This tracks which one started it, so the
+   * single completed transcript goes to the right field — see
+   * `routeVoiceTranscript`.
+   */
+  const listenTargetRef = useRef<VoiceListenTarget>(null);
   const [elapsedSec, setElapsedSec] = useState(0);
   /** How much of the current explanation has been revealed (drives presence). */
   const [teachingRevealed, setTeachingRevealed] = useState(false);
@@ -303,10 +318,25 @@ export function TeachingRoom({
     voice.speak(step.content.body);
   }, [voiceEnabled, phase, step, voice]);
 
-  // Route a completed spoken answer into the question field.
+  // The one registered transcript handler — dispatches to whichever surface
+  // (question panel / Ask Lumen) actually started listening.
   useEffect(() => {
-    voice.onTranscript((text) => setVoiceAnswer(text));
+    voice.onTranscript((text) => {
+      routeVoiceTranscript(listenTargetRef.current, text, {
+        question: setVoiceAnswer,
+        askLumen: setAskLumenTranscript,
+      });
+      listenTargetRef.current = null;
+    });
   }, [voice]);
+
+  // Listening ended without producing a transcript (silence, error, cancel) —
+  // clear the claim so a later stray dispatch can't land on the wrong field.
+  useEffect(() => {
+    if (voice.state === "IDLE" || voice.state === "ERROR") {
+      listenTargetRef.current = null;
+    }
+  }, [voice.state]);
 
   async function submitAnswer(answer: string, elapsedMs: number) {
     setBusy(true);
@@ -631,7 +661,10 @@ export function TeachingRoom({
                             voice.state === "IDLE" || voice.state === "ERROR"
                           }
                           error={voice.error}
-                          onStart={voice.startListening}
+                          onStart={() => {
+                            listenTargetRef.current = "question";
+                            voice.startListening();
+                          }}
                           onStop={voice.stopListening}
                           onRecover={voice.recover}
                           hint="Speak your answer — it drops into the box for you to check."
@@ -736,6 +769,32 @@ export function TeachingRoom({
                   });
                 }
               }}
+              voice={voiceEnabled ? voice : null}
+              voiceTranscript={voiceEnabled ? askLumenTranscript : null}
+              voiceSlot={
+                voiceEnabled && voice.capabilities.recognition ? (
+                  <VoiceControls
+                    state={voice.state}
+                    level={voice.level}
+                    canListen={
+                      voice.state === "IDLE" || voice.state === "ERROR"
+                    }
+                    error={voice.error}
+                    onStart={() => {
+                      listenTargetRef.current = "askLumen";
+                      voice.startListening();
+                    }}
+                    onStop={voice.stopListening}
+                    onRecover={voice.recover}
+                    hint="Speak your question — it drops into the box for you to check."
+                  />
+                ) : voiceEnabled ? (
+                  <p className="text-[11px] text-[var(--color-ink-faint)]">
+                    Voice input isn&apos;t available in this browser — type
+                    instead.
+                  </p>
+                ) : null
+              }
             />
           ) : null}
         </main>

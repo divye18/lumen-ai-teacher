@@ -5,7 +5,10 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 
 import { SourceCitations } from "@/components/teaching/source-citations";
 import { useStagedReveal } from "@/components/teaching/use-staged-reveal";
+import { CaptionTrack } from "@/components/voice/caption-track";
+import type { VoiceControllerHook } from "@/components/voice/use-voice-controller";
 import { apiFetch } from "@/lib/ui/api-client";
+import { mergeVoiceTranscript } from "@/lib/ui/voice-answer";
 import type {
   ConversationIntent,
   TeacherReplyView,
@@ -53,6 +56,9 @@ export function AskLumen({
   onVisual,
   onBusyChange,
   className,
+  voice = null,
+  voiceTranscript = null,
+  voiceSlot = null,
 }: {
   sessionId: string;
   conceptTitle: string;
@@ -60,6 +66,18 @@ export function AskLumen({
   onVisual?: (reply: TeacherReplyView) => void;
   onBusyChange?: (busy: boolean) => void;
   className?: string;
+  /**
+   * The Teaching Room's ONE VoiceController, or `null` when voice is off /
+   * unavailable. Ask Lumen only ever calls `speak`/`stopSpeaking` on it —
+   * `startListening` is exclusively triggered from `voiceSlot`, which the
+   * Teaching Room pre-wires so the shared transcript handler knows this is
+   * the surface that's listening (see `routeVoiceTranscript`).
+   */
+  voice?: VoiceControllerHook | null;
+  /** A completed spoken question, routed here — drops into the field, never auto-sent. */
+  voiceTranscript?: string | null;
+  /** The mic control, already wired by the Teaching Room. Rendered as-is. */
+  voiceSlot?: React.ReactNode;
 }) {
   const reduce = useReducedMotion();
   const [open, setOpen] = useState(false);
@@ -68,10 +86,33 @@ export function AskLumen({
   const [error, setError] = useState<string | null>(null);
   const [reply, setReply] = useState<TeacherReplyView | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const lastTranscript = useRef<string | null>(null);
+  const voiceState = voice?.state ?? null;
+  // The caption only belongs to Ask Lumen while ITS reply is the thing being
+  // spoken — the same shared controller also speaks teaching content and
+  // result feedback elsewhere in the room, so this is a render-time check
+  // against the actual text, not a flag that could go stale.
+  const showCaption =
+    voiceState === "SPEAKING" &&
+    Boolean(reply) &&
+    voice?.caption === reply?.answer;
 
   useEffect(() => {
     onBusyChange?.(pending);
   }, [pending, onBusyChange]);
+
+  // A spoken question — same merge rule as the question panel, reused, not
+  // reimplemented. Never overwrites typed text; a silent transcript is a no-op.
+  useEffect(() => {
+    if (
+      voiceTranscript &&
+      voiceTranscript.trim().length > 0 &&
+      voiceTranscript !== lastTranscript.current
+    ) {
+      lastTranscript.current = voiceTranscript;
+      setMessage((prev) => mergeVoiceTranscript(prev, voiceTranscript) ?? prev);
+    }
+  }, [voiceTranscript]);
 
   async function ask(text: string, intentHint?: ConversationIntent) {
     const trimmed = text.trim();
@@ -97,6 +138,7 @@ export function AskLumen({
     setReply(res.data.reply);
     setMessage("");
     if (res.data.reply.visual && onVisual) onVisual(res.data.reply);
+    if (voice) voice.speak(res.data.reply.answer);
   }
 
   return (
@@ -154,6 +196,7 @@ export function AskLumen({
             exit={reduce ? { opacity: 0 } : { height: 0, opacity: 0 }}
             className="overflow-hidden border-t border-[var(--color-border)]"
           >
+            {voiceSlot ? <div className="px-3 pt-3">{voiceSlot}</div> : null}
             <form
               className="flex items-end gap-2 p-3"
               onSubmit={(e) => {
@@ -202,11 +245,41 @@ export function AskLumen({
           question…
         </div>
       ) : reply ? (
-        <ReplyCard
-          key={reply.answer}
-          reply={reply}
-          onFollowUp={(t) => void ask(t)}
-        />
+        <>
+          <ReplyCard
+            key={reply.answer}
+            reply={reply}
+            onFollowUp={(t) => void ask(t)}
+          />
+          {voice ? (
+            <div className="flex items-center gap-3 border-t border-[var(--color-border)] px-4 py-2">
+              <button
+                type="button"
+                onClick={() => voice.speak(reply.answer)}
+                className="text-[11px] font-medium text-[var(--color-accent)] hover:underline"
+              >
+                {showCaption ? "Replay" : "Listen to this reply"}
+              </button>
+              {showCaption ? (
+                <button
+                  type="button"
+                  onClick={() => voice.stopSpeaking()}
+                  className="text-[11px] font-medium text-[var(--color-ink-muted)] hover:underline"
+                >
+                  Stop
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+          {showCaption && voice?.caption ? (
+            <div className="px-4 pb-3">
+              <CaptionTrack
+                text={voice.caption}
+                spokenChars={voice.spokenChars}
+              />
+            </div>
+          ) : null}
+        </>
       ) : null}
     </div>
   );
