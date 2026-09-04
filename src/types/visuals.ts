@@ -21,6 +21,10 @@ export const VISUAL_MODES = [
   "CODE_VISUALIZATION",
   "INTERACTIVE_SIMULATION",
   "THREE_D",
+  "COMPARISON",
+  "FORMULA",
+  "TIMELINE",
+  "CONCEPT_MAP",
 ] as const;
 
 export type VisualMode = (typeof VISUAL_MODES)[number];
@@ -131,6 +135,66 @@ const simulationDirective = z.object({
   params: z.record(z.string(), z.number()).default({}),
 });
 
+const comparisonColumn = z.object({
+  title: z.string().min(1).max(120),
+  points: z.array(z.string().min(1).max(300)).min(1).max(10),
+});
+
+const comparisonDirective = z.object({
+  title: z.string().min(1).max(200),
+  left: comparisonColumn,
+  right: comparisonColumn,
+  /** Free-text row labels aligning left/right points, when they pair up. */
+  rows: z.array(z.string().min(1).max(120)).max(10).default([]),
+  /** Short phrase naming the dimension that matters most. */
+  highlight: z.string().max(120).optional(),
+});
+
+const formulaDirective = z.object({
+  /** Plain-text formula, e.g. "AMAT = HitTime + MissRate x MissPenalty". */
+  expression: z.string().min(1).max(400),
+  /** Each symbol explained in plain language. */
+  terms: z
+    .array(
+      z.object({
+        symbol: z.string().min(1).max(60),
+        meaning: z.string().min(1).max(240),
+      }),
+    )
+    .max(16)
+    .default([]),
+  /** Optional worked example lines. */
+  example: z.array(z.string().min(1).max(240)).max(8).default([]),
+});
+
+const timelineDirective = z.object({
+  title: z.string().max(200).optional(),
+  events: z
+    .array(
+      z.object({
+        label: z.string().min(1).max(120),
+        detail: z.string().max(300).optional(),
+      }),
+    )
+    .min(2)
+    .max(24),
+});
+
+const conceptMapDirective = z.object({
+  /** The concept at the centre of the map. */
+  root: z.string().min(1).max(120),
+  branches: z
+    .array(
+      z.object({
+        label: z.string().min(1).max(120),
+        relation: z.string().max(60).optional(),
+        children: z.array(z.string().min(1).max(120)).max(8).default([]),
+      }),
+    )
+    .min(1)
+    .max(12),
+});
+
 /**
  * The discriminated union of every supported visual mode.
  * `caption` is always allowed and is plain text.
@@ -166,6 +230,26 @@ export const visualDirectiveSchema = z.discriminatedUnion("mode", [
     mode: z.literal("THREE_D"),
     caption: z.string().max(2_000).optional(),
     threeD: threeDDirective,
+  }),
+  z.object({
+    mode: z.literal("COMPARISON"),
+    caption: z.string().max(2_000).optional(),
+    comparison: comparisonDirective,
+  }),
+  z.object({
+    mode: z.literal("FORMULA"),
+    caption: z.string().max(2_000).optional(),
+    formula: formulaDirective,
+  }),
+  z.object({
+    mode: z.literal("TIMELINE"),
+    caption: z.string().max(2_000).optional(),
+    timeline: timelineDirective,
+  }),
+  z.object({
+    mode: z.literal("CONCEPT_MAP"),
+    caption: z.string().max(2_000).optional(),
+    conceptMap: conceptMapDirective,
   }),
 ]);
 

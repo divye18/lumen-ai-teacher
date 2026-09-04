@@ -1,4 +1,5 @@
 import type { TeachingCitation } from "./citations";
+import type { VisualDirective } from "@/types/visuals";
 import type {
   DifficultyDirection,
   QuestionKind,
@@ -92,6 +93,14 @@ export interface TeachingContentView {
   body: string;
   conceptKey: string;
   groundedInSource: boolean;
+  /**
+   * A validated visual directive to show alongside the text, chosen
+   * deterministically from the concept + the learner's live state. `null` when
+   * a picture would not add anything.
+   */
+  visual: VisualDirective | null;
+  /** One learner-safe sentence on why this visual (for the signal panel). */
+  visualRationale: string | null;
 }
 
 export interface TeachingStepView {

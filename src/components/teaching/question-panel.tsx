@@ -15,19 +15,43 @@ export function QuestionPanel({
   citations,
   onSubmit,
   submitting,
+  voiceTranscript,
+  voiceSlot,
 }: {
   question: QuestionView;
   citations: TeachingCitation[];
   onSubmit: (answer: string, elapsedMs: number) => void;
   submitting: boolean;
+  /** A completed spoken answer — drops into the field for review, never auto-sent. */
+  voiceTranscript?: string | null;
+  /** Voice controls rendered above the textarea, when voice is on. */
+  voiceSlot?: React.ReactNode;
 }) {
   const reduce = useReducedMotion();
   const [answer, setAnswer] = useState("");
+  const [fromVoice, setFromVoice] = useState(false);
   const shownAt = useRef(0);
+  const lastTranscript = useRef<string | null>(null);
 
   useEffect(() => {
     shownAt.current = Date.now();
   }, []);
+
+  useEffect(() => {
+    if (
+      voiceTranscript &&
+      voiceTranscript.trim().length > 0 &&
+      voiceTranscript !== lastTranscript.current
+    ) {
+      lastTranscript.current = voiceTranscript;
+      setAnswer((prev) =>
+        prev.trim().length > 0
+          ? `${prev.trim()} ${voiceTranscript.trim()}`
+          : voiceTranscript.trim(),
+      );
+      setFromVoice(true);
+    }
+  }, [voiceTranscript]);
 
   const elapsed = () =>
     shownAt.current ? Math.max(0, Date.now() - shownAt.current) : 0;
@@ -56,6 +80,8 @@ export function QuestionPanel({
         </div>
       ) : null}
 
+      {voiceSlot ? <div className="mt-5">{voiceSlot}</div> : null}
+
       <form
         className="mt-6"
         onSubmit={(e) => {
@@ -66,6 +92,11 @@ export function QuestionPanel({
         <label htmlFor="answer" className="sr-only">
           Your answer
         </label>
+        {fromVoice ? (
+          <p className="mb-2 text-[11px] text-[var(--color-signal-advancing)]">
+            Filled in from your voice — edit it, then submit.
+          </p>
+        ) : null}
         <textarea
           id="answer"
           value={answer}

@@ -87,6 +87,21 @@ export function LearnerStatePanel({
 
       {signal ? <LearningSignal signal={signal} /> : null}
 
+      {decision && decision.overrides.length > 0 ? (
+        <div className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+          <p className="text-[10px] font-semibold tracking-wider text-[var(--color-accent)] uppercase">
+            Lumen changed direction
+          </p>
+          <p className="mt-1.5 text-[12px] leading-snug text-[var(--color-ink)]">
+            {decision.adaptationNarrative[0] ?? decision.reason}
+          </p>
+          <p className="mt-1 text-[11px] text-[var(--color-ink-faint)]">
+            Strategy: {decision.strategy.replace(/-/g, " ")} ·{" "}
+            {actionLabel(decision.action)}
+          </p>
+        </div>
+      ) : null}
+
       {concepts.length > 0 ? (
         <div className="flex flex-col gap-3 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
           <SessionTimeline

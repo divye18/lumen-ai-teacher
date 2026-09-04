@@ -37,6 +37,7 @@ import {
 } from "@/lib/teaching";
 import { lessonPlanSchema, type LessonPlan } from "@/lib/teaching/contracts";
 import { getKnowledgeGraph, graphSignalFromView } from "@/lib/graph";
+import { resolveVisual, visualSignalFromState } from "@/lib/visuals";
 
 import {
   buildEngineConcept,
@@ -711,6 +712,25 @@ export function createTeachingOrchestrator(
         currentAction: decision.action,
       });
 
+      // Deterministic visual: no model output touches the renderer.
+      const visualSignal = visualSignalFromState({
+        masteryPoints: facts.masteryPoints,
+        lastClassification: facts.lastClassification,
+        repeatedMisconception: facts.repeatedMisconception,
+        incorrectStreak: facts.incorrectStreak,
+        attempts: facts.attempts,
+      });
+      const resolvedVisual = resolveVisual({
+        conceptKey: engineConcept.key,
+        title: engineConcept.title,
+        summary: content.value.body || engineConcept.summary,
+        action: decision.action,
+        strategy: decision.strategy,
+        learnerSignal: visualSignal,
+      });
+      const showVisual =
+        resolvedVisual.source !== "text" || decision.action === "VISUALIZE";
+
       return ok({
         sessionId: data.session.id,
         decision: toDecisionView(decision),
@@ -719,6 +739,8 @@ export function createTeachingOrchestrator(
           body: content.value.body,
           conceptKey: engineConcept.key,
           groundedInSource: content.value.groundedInSource,
+          visual: showVisual ? resolvedVisual.directive : null,
+          visualRationale: showVisual ? resolvedVisual.rationale : null,
         },
         question: null,
         citations: src?.citations ?? [],

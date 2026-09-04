@@ -11,10 +11,13 @@ export const dynamic = "force-dynamic";
 
 export default async function LearnPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ sessionId: string }>;
+  searchParams: Promise<{ demo?: string }>;
 }) {
   const { sessionId } = await params;
+  const { demo } = await searchParams;
   const supabase = await getSupabaseServerClient();
   const user = await requireUser(supabase);
   if (!user.ok) redirect(`/login?next=/learn/${sessionId}`);
@@ -44,6 +47,8 @@ export default async function LearnPage({
       initialSession={data.value.session}
       concepts={data.value.concepts}
       graph={data.value.graph}
+      demo={demo === "1"}
+      voiceCloud={data.value.voiceCloud}
     />
   );
 }

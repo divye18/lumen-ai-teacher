@@ -4,6 +4,7 @@ import { createLessonStore } from "@/lib/db/repositories";
 import type { LumenServerClient } from "@/lib/db/server";
 import { buildTeachingRuntime } from "@/lib/session/service";
 import { getKnowledgeGraph, type KnowledgeGraphView } from "@/lib/graph";
+import { voiceProviderStatus } from "@/lib/voice";
 import type { TimelineConcept } from "@/components/learning/session-timeline";
 import type { SessionView } from "@/lib/session/views";
 import { ok, type Result } from "@/lib/result";
@@ -14,6 +15,8 @@ export interface TeachingRoomData {
   llmConfigured: boolean;
   /** The lesson's knowledge graph with current learner state (may be empty). */
   graph: KnowledgeGraphView;
+  /** Which cloud voice providers are live (null = browser fallback). */
+  voiceCloud: { stt: string | null; tts: string | null };
 }
 
 export async function getTeachingRoomData(
@@ -59,5 +62,13 @@ export async function getTeachingRoomData(
         generatedAt: new Date().toISOString(),
       };
 
-  return ok({ session, concepts, llmConfigured, graph });
+  const voice = voiceProviderStatus();
+
+  return ok({
+    session,
+    concepts,
+    llmConfigured,
+    graph,
+    voiceCloud: { stt: voice.cloudStt, tts: voice.cloudTts },
+  });
 }

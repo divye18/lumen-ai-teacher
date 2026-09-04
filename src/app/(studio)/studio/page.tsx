@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { ContinueLearning } from "@/components/dashboard/continue-learning";
+import { DemoCard } from "@/components/dashboard/demo-card";
 import { EmptyStudio } from "@/components/dashboard/empty-studio";
 import { LearningLens } from "@/components/dashboard/learning-lens";
 import { LearningMomentum } from "@/components/dashboard/learning-momentum";
@@ -27,7 +28,12 @@ export default async function StudioPage() {
   });
 
   if (!overview.hasAnyData) {
-    return <EmptyStudio name={overview.learnerName} />;
+    return (
+      <div className="flex flex-col gap-6">
+        <DemoCard />
+        <EmptyStudio name={overview.learnerName} />
+      </div>
+    );
   }
 
   const firstName = overview.learnerName?.split(" ")[0];
@@ -49,7 +55,9 @@ export default async function StudioPage() {
 
       {overview.activeSession ? (
         <ContinueLearning session={overview.activeSession} />
-      ) : null}
+      ) : (
+        <DemoCard />
+      )}
 
       <KnowledgeGraphPanel graph={overview.graph} />
 

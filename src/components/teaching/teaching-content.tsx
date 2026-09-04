@@ -3,6 +3,7 @@
 import { motion, useReducedMotion } from "framer-motion";
 
 import { SourceCitations } from "@/components/teaching/source-citations";
+import { VisualCanvas } from "@/components/visuals/visual-canvas";
 import { Button } from "@/components/ui/button";
 import type { TeachingContentView } from "@/lib/session/views";
 import type { TeachingCitation } from "@/lib/session/citations";
@@ -12,11 +13,14 @@ export function TeachingContent({
   citations,
   onContinue,
   continuing,
+  hideVisual,
 }: {
   content: TeachingContentView;
   citations: TeachingCitation[];
   onContinue: () => void;
   continuing: boolean;
+  /** The room renders the visual in the canvas column on wide screens. */
+  hideVisual?: boolean;
 }) {
   const reduce = useReducedMotion();
   const paragraphs = content.body.split(/\n{2,}/).filter(Boolean);
@@ -33,6 +37,12 @@ export function TeachingContent({
           <p key={i}>{p}</p>
         ))}
       </div>
+
+      {!hideVisual && content.visual ? (
+        <div className="mt-5">
+          <VisualCanvas directive={content.visual} />
+        </div>
+      ) : null}
 
       {content.groundedInSource && citations.length > 0 ? (
         <div className="mt-5">
