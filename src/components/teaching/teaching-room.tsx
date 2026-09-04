@@ -22,6 +22,7 @@ import { VisualCanvas } from "@/components/visuals/visual-canvas";
 import { VoiceControls } from "@/components/voice/voice-controls";
 import { CaptionTrack } from "@/components/voice/caption-track";
 import { useVoiceController } from "@/components/voice/use-voice-controller";
+import { useVoicePreference } from "@/components/voice/use-voice-preference";
 import type { VoiceCloudStatus } from "@/lib/voice/types";
 import {
   routeVoiceTranscript,
@@ -119,7 +120,7 @@ export function TeachingRoom({
   const [busy, setBusy] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const [voiceEnabled, setVoiceEnabled] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useVoicePreference();
   const [voiceAnswer, setVoiceAnswer] = useState<string | null>(null);
   const [askLumenTranscript, setAskLumenTranscript] = useState<string | null>(
     null,
