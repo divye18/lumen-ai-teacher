@@ -247,6 +247,55 @@ describe("createCloudRecognizer — behaviour", () => {
     expect(onFinal).toHaveBeenCalledWith("cache hit");
   });
 
+  it("a late-arriving response from an abandoned recording cannot resurrect a stale answer", async () => {
+    let resolveFirst!: (r: Response) => void;
+    const firstUpload = new Promise<Response>((r) => (resolveFirst = r));
+    const fetchImpl = vi
+      .fn()
+      .mockReturnValueOnce(firstUpload)
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ ok: true, transcript: "second recording" }),
+          { status: 200 },
+        ),
+      );
+    stubSttGlobals(fetchImpl as unknown as typeof fetch);
+    const recognizer = createCloudRecognizer()!;
+    const onFinal = vi.fn();
+
+    // First recording: start, stop (upload begins but never resolves yet).
+    recognizer.start({ onFinal, onError: vi.fn(), onEnd: vi.fn() });
+    await new Promise((r) => setTimeout(r, 0));
+    recognizer.stop();
+    await new Promise((r) => setTimeout(r, 0));
+
+    // A second recording starts before the first upload ever settles — this
+    // must abort the first upload rather than let it land later.
+    recognizer.start({ onFinal, onError: vi.fn(), onEnd: vi.fn() });
+    await new Promise((r) => setTimeout(r, 0));
+    recognizer.stop();
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(onFinal).toHaveBeenCalledWith("second recording");
+    expect(onFinal).not.toHaveBeenCalledWith(expect.stringMatching(/first/i));
+
+    // Now the abandoned first request finally resolves — it must be ignored.
+    resolveFirst(
+      new Response(
+        JSON.stringify({ ok: true, transcript: "first recording" }),
+        {
+          status: 200,
+        },
+      ),
+    );
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(onFinal).toHaveBeenCalledTimes(1);
+    expect(onFinal).not.toHaveBeenCalledWith("first recording");
+  });
+
   it("never fabricates a transcript from a near-silent clip", async () => {
     class TinyRecorder extends FakeMediaRecorder {
       stop() {

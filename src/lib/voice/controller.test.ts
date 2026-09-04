@@ -215,4 +215,23 @@ describe("VoiceController — state machine", () => {
     c.abort();
     expect(c.getState()).toBe("IDLE");
   });
+
+  it("starting to listen while Lumen is still speaking stops the speech first — never records over itself", () => {
+    const rec = fakeRecognizer();
+    const synth = fakeSynth();
+    const c = new VoiceController({ recognizer: rec, synthesizer: synth });
+    c.speak("A long explanation.");
+    expect(c.getState()).toBe("SPEAKING");
+    c.startListening();
+    expect(synth.cancel).toHaveBeenCalledTimes(1);
+    expect(c.getState()).toBe("LISTENING");
+  });
+
+  it("starting to listen while idle never touches the synthesizer", () => {
+    const rec = fakeRecognizer();
+    const synth = fakeSynth();
+    const c = new VoiceController({ recognizer: rec, synthesizer: synth });
+    c.startListening();
+    expect(synth.cancel).not.toHaveBeenCalled();
+  });
 });

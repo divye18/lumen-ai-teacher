@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import type { QuestionView } from "@/lib/session/views";
 import type { TeachingCitation } from "@/lib/session/citations";
 import { questionKindLabel } from "@/lib/ui/learning-presentation";
+import { mergeVoiceTranscript } from "@/lib/ui/voice-answer";
 
 export function QuestionPanel({
   question,
@@ -91,11 +92,10 @@ function FreeFormQuestion({
       voiceTranscript !== lastTranscript.current
     ) {
       lastTranscript.current = voiceTranscript;
-      setAnswer((prev) =>
-        prev.trim().length > 0
-          ? `${prev.trim()} ${voiceTranscript.trim()}`
-          : voiceTranscript.trim(),
-      );
+      // Silent/whitespace-only is already excluded above, so this is never
+      // null here — mergeVoiceTranscript is still the single source of truth
+      // for the merge rule (tested in isolation in voice-answer.test.ts).
+      setAnswer((prev) => mergeVoiceTranscript(prev, voiceTranscript) ?? prev);
       setFromVoice(true);
     }
   }, [voiceTranscript]);

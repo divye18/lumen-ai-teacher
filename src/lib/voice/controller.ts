@@ -113,6 +113,10 @@ export class VoiceController {
       this.fail("Speech recognition is not available.");
       return false;
     }
+    // SPEAKING -> LISTENING is a valid transition (the learner can start
+    // talking over a reply), but the mic must never record while Lumen's own
+    // voice is still playing — stop it first so it can't be transcribed.
+    if (this.state === "SPEAKING") this.synthesizer?.cancel();
     if (!this.transition("LISTENING")) return false;
     this.recognizer.start({
       onPartial: (text) => {
