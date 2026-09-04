@@ -92,6 +92,7 @@ import {
   buildDiagnosticConceptsAndEdges,
   buildMasteryUpsertInputs,
   buildStoredDiagnosticState,
+  findMostImportantGap,
   markDiagnosticCompleted,
   needsDiagnostic,
   parseStoredDiagnosticState,
@@ -99,7 +100,12 @@ import {
   toDiagnosticQuestionSet,
   type DiagnosticGraphInput,
   type DiagnosticLessonConcept,
+  type StoredDiagnosticGap,
 } from "./diagnostic-flow";
+import {
+  buildDiagnosticSummaryView,
+  resolveDiagnosticSummaryPhase,
+} from "./diagnostic-summary";
 import {
   deriveLearningEvent,
   deriveLearningIntelligence,
@@ -651,6 +657,10 @@ export function createTeachingOrchestrator(
         };
       }),
       diagnostic: resolveDiagnosticPhase(storedDiagnostic).pending,
+      diagnosticSummary: resolveDiagnosticSummaryPhase(
+        storedDiagnostic,
+        session.current_action,
+      ),
     });
   }
 
@@ -1908,16 +1918,38 @@ export function createTeachingOrchestrator(
       const stored = parseStoredDiagnosticState(snap.__diagnostic);
 
       // Nothing pending, or already completed — idempotent replay. Never
-      // re-grades, re-seeds mastery, or repeats the diagnostic.
+      // re-grades, re-seeds mastery, or repeats the diagnostic. Acknowledges
+      // the summary (clears current_action so it stops being shown again),
+      // but only a no-op state change — no grading, no mastery writes.
       if (!stored || stored.status === "COMPLETED") {
-        const summary = stored?.summary;
+        if (stored && session.current_action === "DIAGNOSTIC_SUMMARY") {
+          await sessions.updateTeaching({
+            id: session.id,
+            currentAction: null,
+          });
+        }
+        const summaryView = stored?.summary
+          ? buildDiagnosticSummaryView(stored.summary)
+          : {
+              strong: [],
+              developing: [],
+              weak: [],
+              mostImportantGap: null,
+              adaptationNote:
+                "I don't have enough evidence yet, so I'll teach from the beginning and adjust as we go.",
+            };
         return ok({
           sessionId: session.id,
-          strongConceptKeys: summary?.strong ?? [],
-          developingConceptKeys: summary?.developing ?? [],
-          weakConceptKeys: summary?.weak ?? [],
+          summary: summaryView,
           alreadyCompleted: true,
         });
+      }
+
+      // A still-pending diagnostic must actually be answered — an empty
+      // batch is only valid as an acknowledgment of an already-COMPLETED one
+      // (handled above), never a way to grade/complete one with no evidence.
+      if (input.answers.length === 0) {
+        return err(new ValidationError("diagnostic answers must not be empty"));
       }
 
       if (!session.lesson_id) {
@@ -1972,6 +2004,21 @@ export function createTeachingOrchestrator(
         await mastery.upsert(upsertInput);
       }
 
+      // The most important prerequisite/knowledge gap, using only real graph
+      // evidence and the mastery just seeded above — never fabricated. A
+      // best-effort read: a graph failure just means no gap is surfaced.
+      let gap: StoredDiagnosticGap | null = null;
+      try {
+        const graphRes = await getKnowledgeGraph(deps.db, deps.userId, {
+          lessonId: session.lesson_id,
+        });
+        if (graphRes.ok) {
+          gap = findMostImportantGap(result, graphRes.value);
+        }
+      } catch {
+        gap = null;
+      }
+
       const now = new Date().toISOString();
       await assessments.complete({
         id: stored.assessmentId,
@@ -1983,18 +2030,18 @@ export function createTeachingOrchestrator(
         completedAt: now,
       });
 
-      const completedState = markDiagnosticCompleted(stored, result, now);
+      const completedState = markDiagnosticCompleted(stored, result, gap, now);
       await sessions.updateTeaching({
         id: session.id,
-        currentAction: null,
+        // Not cleared to null yet — the learner still needs to see and
+        // acknowledge the summary; see the idempotent-replay branch above.
+        currentAction: "DIAGNOSTIC_SUMMARY",
         masterySnapshot: { ...snap, __diagnostic: completedState },
       });
 
       return ok({
         sessionId: session.id,
-        strongConceptKeys: result.strongConceptKeys,
-        developingConceptKeys: result.developingConceptKeys,
-        weakConceptKeys: result.weakConceptKeys,
+        summary: buildDiagnosticSummaryView(completedState.summary!),
         alreadyCompleted: false,
       });
     },

@@ -43,6 +43,12 @@ export type SubmitInteractionRequest = z.infer<
 
 export const submitDiagnosticRequestSchema = z.object({
   sessionId: uuidSchema,
+  /**
+   * The graded answer batch. An empty array is valid and used only to
+   * acknowledge an ALREADY-completed diagnostic (dismiss its one-time
+   * summary) — the orchestrator ignores `answers` entirely on that path, it
+   * never grades an empty submission against a still-pending diagnostic.
+   */
   answers: z
     .array(
       z.object({
@@ -50,7 +56,6 @@ export const submitDiagnosticRequestSchema = z.object({
         answer: structuredAnswerSchema,
       }),
     )
-    .min(1)
     .max(DIAGNOSTIC_MAX_QUESTIONS),
 });
 export type SubmitDiagnosticRequest = z.infer<

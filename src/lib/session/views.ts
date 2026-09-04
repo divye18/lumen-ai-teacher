@@ -1,4 +1,5 @@
 import type { DiagnosticPendingView } from "./diagnostic-flow";
+import type { DiagnosticSummaryView } from "./diagnostic-summary";
 import type { TeachingCitation } from "./citations";
 import type { VisualDirective } from "@/types/visuals";
 import type { ClientStructuredQuestion } from "@/lib/assessment/structured";
@@ -75,14 +76,22 @@ export interface SessionView {
    * already completed it. See `session/diagnostic-flow.ts`.
    */
   diagnostic: DiagnosticPendingView | null;
+  /**
+   * The evidence-backed summary of a just-completed diagnostic, shown once
+   * before Teaching Room. `null` once acknowledged (or when no diagnostic
+   * ran) — see `session/diagnostic-summary.ts`'s `resolveDiagnosticSummaryPhase`.
+   * A page reload before acknowledging still returns this (not lost); it
+   * never reappears after the learner continues (never permanently blocks
+   * Teaching Room).
+   */
+  diagnosticSummary: DiagnosticSummaryView | null;
 }
 
 export interface DiagnosticCompletionView {
   sessionId: string;
-  strongConceptKeys: string[];
-  developingConceptKeys: string[];
-  weakConceptKeys: string[];
-  /** True when this call found an already-COMPLETED diagnostic (idempotent replay). */
+  /** The same evidence-backed summary `SessionView.diagnosticSummary` carries. */
+  summary: DiagnosticSummaryView;
+  /** True when this call found an already-COMPLETED diagnostic (idempotent replay/acknowledgment). */
   alreadyCompleted: boolean;
 }
 

@@ -22,6 +22,7 @@ import type {
   DiagnosticQuestionSet,
   DiagnosticResult,
 } from "@/lib/assessment/diagnostic";
+import { graphSignalFromView, type KnowledgeGraphView } from "@/lib/graph";
 
 /**
  * DIAGNOSTIC LESSON-STARTUP WIRING — pure decision/mapping logic.
@@ -155,11 +156,39 @@ export type StoredDiagnosticQuestionItem = z.infer<
   typeof storedDiagnosticQuestionItemSchema
 >;
 
-const storedDiagnosticSummarySchema = z.object({
-  strong: z.array(z.string()),
-  developing: z.array(z.string()),
-  weak: z.array(z.string()),
+const storedDiagnosticConceptRefSchema = z.object({
+  conceptKey: z.string(),
+  conceptTitle: z.string(),
 });
+export type StoredDiagnosticConceptRef = z.infer<
+  typeof storedDiagnosticConceptRefSchema
+>;
+
+/**
+ * A weak, load-bearing concept whose actual upstream prerequisite is also
+ * weak — real graph evidence, never fabricated. Only ever built by
+ * `findMostImportantGap` from a real `PREREQUISITE`/`DEPENDS_ON`/`PART_OF`
+ * edge plus an actually-assessed low-mastery prerequisite concept.
+ */
+const storedDiagnosticGapSchema = z.object({
+  conceptKey: z.string(),
+  conceptTitle: z.string(),
+  prerequisiteConceptKey: z.string(),
+  prerequisiteConceptTitle: z.string(),
+});
+export type StoredDiagnosticGap = z.infer<typeof storedDiagnosticGapSchema>;
+
+const storedDiagnosticSummarySchema = z.object({
+  strong: z.array(storedDiagnosticConceptRefSchema),
+  developing: z.array(storedDiagnosticConceptRefSchema),
+  weak: z.array(storedDiagnosticConceptRefSchema),
+  /** Subset of `weak` that is also load-bearing/prerequisite for other concepts. */
+  weakLoadBearing: z.array(storedDiagnosticConceptRefSchema),
+  gap: storedDiagnosticGapSchema.nullable(),
+});
+export type StoredDiagnosticSummary = z.infer<
+  typeof storedDiagnosticSummarySchema
+>;
 
 const storedDiagnosticStateSchema = z.object({
   status: z.enum(["IN_PROGRESS", "COMPLETED"]),
@@ -221,19 +250,76 @@ export function toDiagnosticQuestionSet(
   };
 }
 
+/**
+ * Finds the single most important prerequisite/knowledge gap surfaced by the
+ * diagnostic, using ONLY real graph evidence — never invented.
+ *
+ * Walks `result.weakLoadBearingConceptKeys` (weak AND load-bearing concepts,
+ * already computed deterministically by `diagnostic.ts`) in order, and reuses
+ * the existing `graphSignalFromView` (the same signal the live teaching
+ * policy uses) to check whether that concept has a real, already-assessed,
+ * still-weak upstream prerequisite. Returns the first one found, with its
+ * real key resolved from the graph's own nodes. Returns `null` — never a
+ * fabricated or partial gap — when no lesson concept has a resolvable weak
+ * upstream prerequisite.
+ */
+export function findMostImportantGap(
+  result: DiagnosticResult,
+  graph: Pick<KnowledgeGraphView, "nodes" | "edges">,
+): StoredDiagnosticGap | null {
+  const titleByKey = new Map(
+    result.concepts.map((c) => [c.conceptKey, c.conceptTitle]),
+  );
+  const keyByTitle = new Map(
+    graph.nodes
+      .filter((n): n is typeof n & { conceptKey: string } =>
+        Boolean(n.conceptKey),
+      )
+      .map((n) => [n.title, n.conceptKey]),
+  );
+
+  for (const conceptKey of result.weakLoadBearingConceptKeys) {
+    const signal = graphSignalFromView(graph, conceptKey);
+    const prereq = signal.weakUpstreamPrerequisite;
+    if (!prereq) continue;
+    const prerequisiteConceptKey = keyByTitle.get(prereq.title);
+    // Can't resolve a real key for the prerequisite — skip rather than guess.
+    if (!prerequisiteConceptKey) continue;
+    return {
+      conceptKey,
+      conceptTitle: titleByKey.get(conceptKey) ?? conceptKey,
+      prerequisiteConceptKey,
+      prerequisiteConceptTitle: prereq.title,
+    };
+  }
+  return null;
+}
+
 export function markDiagnosticCompleted(
   stored: StoredDiagnosticState,
   result: DiagnosticResult,
+  gap: StoredDiagnosticGap | null,
   nowISO: string,
 ): StoredDiagnosticState {
+  const titleByKey = new Map(
+    result.concepts.map((c) => [c.conceptKey, c.conceptTitle]),
+  );
+  const toRefs = (keys: string[]): StoredDiagnosticConceptRef[] =>
+    keys.map((conceptKey) => ({
+      conceptKey,
+      conceptTitle: titleByKey.get(conceptKey) ?? conceptKey,
+    }));
+
   return {
     ...stored,
     status: "COMPLETED",
     completedAt: nowISO,
     summary: {
-      strong: result.strongConceptKeys,
-      developing: result.developingConceptKeys,
-      weak: result.weakConceptKeys,
+      strong: toRefs(result.strongConceptKeys),
+      developing: toRefs(result.developingConceptKeys),
+      weak: toRefs(result.weakConceptKeys),
+      weakLoadBearing: toRefs(result.weakLoadBearingConceptKeys),
+      gap,
     },
   };
 }

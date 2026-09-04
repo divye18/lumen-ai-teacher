@@ -51,6 +51,16 @@ export default async function LearnPage({
     );
   }
 
+  if (data.value.session.diagnosticSummary) {
+    return (
+      <DiagnosticGate
+        sessionId={sessionId}
+        items={[]}
+        initialSummary={data.value.session.diagnosticSummary}
+      />
+    );
+  }
+
   return (
     <TeachingRoom
       sessionId={sessionId}

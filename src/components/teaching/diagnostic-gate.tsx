@@ -3,40 +3,45 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { Button } from "@/components/ui/button";
 import type { StructuredAnswer } from "@/lib/assessment/structured";
 import type { DiagnosticQuestionItemView } from "@/lib/session/diagnostic-flow";
+import type { DiagnosticSummaryView } from "@/lib/session/diagnostic-summary";
 
+import { DiagnosticSummaryPanel } from "./diagnostic-summary-panel";
 import { StructuredQuestion } from "./structured/structured-question";
 
 /**
- * DIAGNOSTIC GATE — a short pre-assessment shown before the Teaching Room,
- * only when `SessionView.diagnostic` is non-null (see
- * `session/diagnostic-flow.ts`'s `resolveDiagnosticPhase`). Reuses the
- * existing `StructuredQuestion` renderer for every format — no new question
- * UI. On completion it refreshes the page, which re-fetches the session and
- * naturally renders the normal Teaching Room, since the diagnostic is now
- * COMPLETED server-side.
+ * DIAGNOSTIC GATE — shown before the Teaching Room whenever `SessionView`
+ * has a pending diagnostic (`items.length > 0`) or an un-acknowledged
+ * completed one (`initialSummary`, from a reload right after completion —
+ * see `session/diagnostic-summary.ts`'s `resolveDiagnosticSummaryPhase`).
+ *
+ * Reuses the existing `StructuredQuestion` renderer for every question
+ * format — no new question UI — and `DiagnosticSummaryPanel` for the
+ * completion screen. "Continue to Teaching Room" acknowledges via the same
+ * `/api/teaching/diagnostic` endpoint (an empty answer batch is a no-op
+ * acknowledgment once the diagnostic is COMPLETED) then refreshes, which
+ * naturally renders the normal Teaching Room since the server no longer
+ * reports a pending diagnostic or summary.
  */
-
-interface DiagnosticSummary {
-  strongConceptKeys: string[];
-  developingConceptKeys: string[];
-  weakConceptKeys: string[];
-}
 
 export function DiagnosticGate({
   sessionId,
   items,
+  initialSummary,
 }: {
   sessionId: string;
   items: DiagnosticQuestionItemView[];
+  initialSummary?: DiagnosticSummaryView | null;
 }) {
   const router = useRouter();
   const [index, setIndex] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const [continuing, setContinuing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [summary, setSummary] = useState<DiagnosticSummary | null>(null);
+  const [summary, setSummary] = useState<DiagnosticSummaryView | null>(
+    initialSummary ?? null,
+  );
   const [answeredSoFar, setAnsweredSoFar] = useState<
     { conceptKey: string; answer: StructuredAnswer }[]
   >([]);
@@ -69,11 +74,7 @@ export function DiagnosticGate({
           json?.error?.message ?? "The diagnostic couldn't be graded.",
         );
       }
-      setSummary({
-        strongConceptKeys: json.strongConceptKeys,
-        developingConceptKeys: json.developingConceptKeys,
-        weakConceptKeys: json.weakConceptKeys,
-      });
+      setSummary(json.summary as DiagnosticSummaryView);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong.");
     } finally {
@@ -81,39 +82,37 @@ export function DiagnosticGate({
     }
   }
 
+  async function handleContinue() {
+    setContinuing(true);
+    try {
+      // Acknowledges the completed diagnostic (clears it from the session
+      // view) so it doesn't reappear; an empty batch is a safe no-op once
+      // status is already COMPLETED — see submitDiagnostic in orchestrator.ts.
+      await fetch("/api/teaching/diagnostic", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId, answers: [] }),
+      });
+    } catch {
+      // Best-effort — refresh regardless so the learner isn't stuck.
+    } finally {
+      router.refresh();
+    }
+  }
+
   if (summary) {
-    const { strongConceptKeys, developingConceptKeys, weakConceptKeys } =
-      summary;
     return (
-      <div className="mx-auto max-w-xl px-6 py-16 text-center">
-        <p className="text-[13px] font-semibold tracking-wide text-[var(--color-accent)] uppercase">
-          Quick check complete
-        </p>
-        <h1 className="mt-3 text-2xl font-semibold text-[var(--color-ink)]">
-          Here&apos;s where you&apos;re starting from
-        </h1>
-        <p className="mt-4 text-[14px] leading-relaxed text-[var(--color-ink-muted)]">
-          {strongConceptKeys.length > 0
-            ? `Already solid on ${strongConceptKeys.length} concept${strongConceptKeys.length === 1 ? "" : "s"}. `
-            : ""}
-          {developingConceptKeys.length > 0
-            ? `Getting there on ${developingConceptKeys.length}. `
-            : ""}
-          {weakConceptKeys.length > 0
-            ? `We'll start with ${weakConceptKeys.length} you haven't seen yet.`
-            : ""}
-          {strongConceptKeys.length === 0 &&
-          developingConceptKeys.length === 0 &&
-          weakConceptKeys.length === 0
-            ? "Lumen will teach from the beginning."
-            : ""}
-        </p>
-        <Button className="mt-8" size="lg" onClick={() => router.refresh()}>
-          Enter Teaching Room
-        </Button>
+      <div className="mx-auto max-w-xl px-6 py-16">
+        <DiagnosticSummaryPanel
+          summary={summary}
+          onContinue={handleContinue}
+          continuing={continuing}
+        />
       </div>
     );
   }
+
+  if (!current) return null;
 
   return (
     <div className="mx-auto max-w-xl px-6 py-16">

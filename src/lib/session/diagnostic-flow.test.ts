@@ -6,6 +6,7 @@ import {
   buildDiagnosticQuestionItemViews,
   buildMasteryUpsertInputs,
   buildStoredDiagnosticState,
+  findMostImportantGap,
   markDiagnosticCompleted,
   needsDiagnostic,
   parseStoredDiagnosticState,
@@ -14,6 +15,7 @@ import {
   type DiagnosticGraphInput,
   type DiagnosticLessonConcept,
 } from "./diagnostic-flow";
+import type { KnowledgeGraphEdge, KnowledgeGraphNode } from "@/lib/graph";
 import {
   scoreDiagnosticQuestionSet,
   selectDiagnosticQuestionSet,
@@ -159,22 +161,245 @@ describe("stored diagnostic state round-trip", () => {
       set,
       "2026-01-01T00:00:00.000Z",
     );
-    const result: DiagnosticResult = {
-      concepts: [],
-      strongConceptKeys: ["memory-hierarchy"],
-      developingConceptKeys: [],
-      weakConceptKeys: [],
-      weakLoadBearingConceptKeys: [],
-      unansweredConceptKeys: [],
-    };
+    const item = set.items[0];
+    if (item.question.format !== "MCQ") throw new Error("expected MCQ");
+    const result = scoreDiagnosticQuestionSet(set, [
+      {
+        conceptKey: item.conceptKey,
+        answer: { format: "MCQ", selectedId: item.question.data.correctId },
+      },
+    ]);
+    expect(result.strongConceptKeys).toEqual(["memory-hierarchy"]);
+
     const completed = markDiagnosticCompleted(
       stored,
       result,
+      null,
       "2026-01-01T00:05:00.000Z",
     );
     expect(completed.status).toBe("COMPLETED");
-    expect(completed.summary?.strong).toEqual(["memory-hierarchy"]);
+    expect(completed.summary).toEqual({
+      strong: [
+        { conceptKey: "memory-hierarchy", conceptTitle: "Memory hierarchy" },
+      ],
+      developing: [],
+      weak: [],
+      weakLoadBearing: [],
+      gap: null,
+    });
     expect(completed.items).toEqual(stored.items);
+  });
+});
+
+describe("findMostImportantGap", () => {
+  function node(overrides: Partial<KnowledgeGraphNode>): KnowledgeGraphNode {
+    return {
+      id: overrides.conceptKey ?? "id",
+      normalizedKey: overrides.conceptKey ?? "id",
+      conceptKey: overrides.conceptKey ?? null,
+      title: "Untitled",
+      description: null,
+      importance: 0.5,
+      masteryPoints: 0,
+      masteryBand: "Not understood",
+      bandId: "not-understood",
+      confidence: 0,
+      attempts: 0,
+      assessed: false,
+      status: "PENDING",
+      misconceptionCount: 0,
+      misconceptions: [],
+      sourcePages: [],
+      sourceDocumentId: null,
+      sourceDocumentTitle: null,
+      lessonId: null,
+      lessonTitle: null,
+      depth: 0,
+      layer: 0,
+      row: 0,
+      x: 0.5,
+      y: 0.5,
+      isCurrent: false,
+      ...overrides,
+    };
+  }
+  function edge(
+    source: string,
+    target: string,
+    type: KnowledgeGraphEdge["type"] = "PREREQUISITE",
+  ): KnowledgeGraphEdge {
+    return {
+      id: `${source}-${target}`,
+      source,
+      target,
+      type,
+      label: type,
+      confidence: 1,
+      ordering: true,
+    };
+  }
+
+  const cacheVsRam = {
+    conceptKey: "cache-vs-ram",
+    title: "Cache vs RAM",
+    apparentKnowledge: "WEAK" as const,
+    isLoadBearing: true,
+    isPrerequisite: false,
+    grade: {} as never,
+  };
+  const memoryHierarchyResultConcept = {
+    conceptKey: "memory-hierarchy",
+    title: "Memory hierarchy",
+    apparentKnowledge: "WEAK" as const,
+    isLoadBearing: false,
+    isPrerequisite: true,
+    grade: {} as never,
+  };
+
+  function resultWith(
+    weakLoadBearingConceptKeys: string[],
+    concepts: { conceptKey: string; title: string }[],
+  ): DiagnosticResult {
+    return {
+      concepts: concepts.map((c) => ({
+        conceptKey: c.conceptKey,
+        conceptTitle: c.title,
+        apparentKnowledge: "WEAK",
+        isLoadBearing: false,
+        isPrerequisite: false,
+        grade: {} as never,
+      })),
+      strongConceptKeys: [],
+      developingConceptKeys: [],
+      weakConceptKeys: concepts.map((c) => c.conceptKey),
+      weakLoadBearingConceptKeys,
+      unansweredConceptKeys: [],
+    };
+  }
+
+  // 4/5. Weak load-bearing concept + real weak assessed prerequisite -> gap.
+  it("returns a real gap when a weak load-bearing concept has an assessed, still-weak upstream prerequisite", () => {
+    const graph = {
+      nodes: [
+        node({
+          conceptKey: "memory-hierarchy",
+          title: "Memory hierarchy",
+          masteryPoints: 20,
+          assessed: true,
+        }),
+        node({
+          conceptKey: "cache-vs-ram",
+          title: "Cache vs RAM",
+          masteryPoints: 10,
+          assessed: true,
+        }),
+      ],
+      edges: [edge("memory-hierarchy", "cache-vs-ram")],
+    };
+    const result = resultWith(
+      ["cache-vs-ram"],
+      [cacheVsRam, memoryHierarchyResultConcept].map((c) => ({
+        conceptKey: c.conceptKey,
+        title: c.title,
+      })),
+    );
+    const gap = findMostImportantGap(result, graph);
+    expect(gap).toEqual({
+      conceptKey: "cache-vs-ram",
+      conceptTitle: "Cache vs RAM",
+      prerequisiteConceptKey: "memory-hierarchy",
+      prerequisiteConceptTitle: "Memory hierarchy",
+    });
+  });
+
+  // 6/9. No graph edges at all -> no fabricated claim.
+  it("returns null when the graph has no edges for the weak concepts", () => {
+    const graph = {
+      nodes: [
+        node({
+          conceptKey: "cache-vs-ram",
+          title: "Cache vs RAM",
+          masteryPoints: 10,
+          assessed: true,
+        }),
+      ],
+      edges: [],
+    };
+    const result = resultWith(
+      ["cache-vs-ram"],
+      [{ conceptKey: "cache-vs-ram", title: "Cache vs RAM" }],
+    );
+    expect(findMostImportantGap(result, graph)).toBeNull();
+  });
+
+  it("returns null when there are no weak load-bearing concepts", () => {
+    const graph = { nodes: [], edges: [] };
+    const result = resultWith([], []);
+    expect(findMostImportantGap(result, graph)).toBeNull();
+  });
+
+  it("returns null when the upstream prerequisite exists but hasn't been assessed", () => {
+    const graph = {
+      nodes: [
+        node({
+          conceptKey: "memory-hierarchy",
+          title: "Memory hierarchy",
+          masteryPoints: 0,
+          assessed: false,
+        }),
+        node({
+          conceptKey: "cache-vs-ram",
+          title: "Cache vs RAM",
+          masteryPoints: 10,
+          assessed: true,
+        }),
+      ],
+      edges: [edge("memory-hierarchy", "cache-vs-ram")],
+    };
+    const result = resultWith(
+      ["cache-vs-ram"],
+      [{ conceptKey: "cache-vs-ram", title: "Cache vs RAM" }],
+    );
+    expect(findMostImportantGap(result, graph)).toBeNull();
+  });
+
+  it("skips a weak load-bearing concept with no gap and returns the next one that has one", () => {
+    const graph = {
+      nodes: [
+        node({
+          conceptKey: "no-prereq-concept",
+          title: "No Prereq Concept",
+          masteryPoints: 10,
+          assessed: true,
+        }),
+        node({
+          conceptKey: "memory-hierarchy",
+          title: "Memory hierarchy",
+          masteryPoints: 20,
+          assessed: true,
+        }),
+        node({
+          conceptKey: "cache-vs-ram",
+          title: "Cache vs RAM",
+          masteryPoints: 10,
+          assessed: true,
+        }),
+      ],
+      edges: [edge("memory-hierarchy", "cache-vs-ram")],
+    };
+    const result = resultWith(
+      ["no-prereq-concept", "cache-vs-ram"],
+      [
+        { conceptKey: "no-prereq-concept", title: "No Prereq Concept" },
+        { conceptKey: "cache-vs-ram", title: "Cache vs RAM" },
+      ],
+    );
+    expect(findMostImportantGap(result, graph)).toEqual({
+      conceptKey: "cache-vs-ram",
+      conceptTitle: "Cache vs RAM",
+      prerequisiteConceptKey: "memory-hierarchy",
+      prerequisiteConceptTitle: "Memory hierarchy",
+    });
   });
 });
 
