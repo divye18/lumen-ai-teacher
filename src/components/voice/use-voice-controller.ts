@@ -19,6 +19,7 @@ import {
   detectVoiceCapabilities,
   type VoiceCapabilities,
 } from "@/lib/voice/capabilities";
+import { mapSessionLanguageToVoiceLocale } from "@/lib/voice/language";
 import type { VoiceCloudStatus } from "@/lib/voice/types";
 
 /**
@@ -56,6 +57,10 @@ export interface VoiceControllerHook {
 
 export function useVoiceController(
   voiceCloud?: VoiceCloudStatus,
+  /** The session's `language` field (`"en" | "hi" | "hinglish"`) — the ONLY
+   * source of truth for voice locale; never inferred from the transcript,
+   * browser locale, or UI locale. */
+  language?: string,
 ): VoiceControllerHook {
   const [state, setState] = useState<VoiceState>("IDLE");
   const [partialTranscript, setPartial] = useState("");
@@ -80,17 +85,23 @@ export function useVoiceController(
   // Deliberately mount-only: `capabilities`/`voiceCloud` don't change after
   // the first render, and the adapters below start real browser APIs.
   const voiceDeps = useMemo(() => {
+    // The ONLY place `session.language` is mapped to a voice locale — every
+    // adapter below (browser + cloud, primary + fallback) is built from this
+    // one resolved tag, so a mid-utterance fallback never changes language.
+    const voiceLocale = mapSessionLanguageToVoiceLocale(language);
     const browserRecognizer = capabilities.recognition
-      ? createBrowserRecognizer()
+      ? createBrowserRecognizer(voiceLocale)
       : null;
     const browserSynthesizer = capabilities.synthesis
-      ? createBrowserSynthesizer()
+      ? createBrowserSynthesizer(voiceLocale)
       : null;
     const cloudRecognizer =
       voiceCloud?.stt && capabilities.microphone
-        ? createCloudRecognizer()
+        ? createCloudRecognizer(voiceLocale)
         : null;
-    const cloudSynthesizer = voiceCloud?.tts ? createCloudSynthesizer() : null;
+    const cloudSynthesizer = voiceCloud?.tts
+      ? createCloudSynthesizer(voiceLocale)
+      : null;
     return {
       browserRecognizer,
       browserSynthesizer,

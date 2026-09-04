@@ -79,6 +79,22 @@ describe("createCloudSynthesizer — behaviour", () => {
     expect(body).toEqual({ text: "Cache is fast." });
   });
 
+  it("includes the resolved language in the request body when given one", async () => {
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(new Blob(["audio"], { type: "audio/mpeg" }), {
+          status: 200,
+        }),
+    );
+    stubTtsGlobals(fetchImpl as unknown as typeof fetch);
+    const synth = createCloudSynthesizer("hi-IN")!;
+    synth.speak("नमस्ते", { onEnd: vi.fn(), onError: vi.fn() });
+    await new Promise((r) => setTimeout(r, 0));
+    const call = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    const body = JSON.parse(call[1].body as string);
+    expect(body).toEqual({ text: "नमस्ते", language: "hi-IN" });
+  });
+
   it("reports onError on a non-ok response, never throws", async () => {
     const fetchImpl = vi.fn(async () => new Response(null, { status: 503 }));
     stubTtsGlobals(fetchImpl as unknown as typeof fetch);
@@ -168,6 +184,46 @@ function stubSttGlobals(
 }
 
 describe("createCloudRecognizer — behaviour", () => {
+  it("includes the resolved language as a form field when given one", async () => {
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ ok: true, transcript: "cache hit" }), {
+          status: 200,
+        }),
+    );
+    stubSttGlobals(fetchImpl as unknown as typeof fetch);
+    const recognizer = createCloudRecognizer("hi-IN")!;
+    recognizer.start({ onFinal: vi.fn(), onError: vi.fn(), onEnd: vi.fn() });
+    await new Promise((r) => setTimeout(r, 0));
+    recognizer.stop();
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+
+    const call = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    const form = call[1].body as FormData;
+    expect(form.get("language")).toBe("hi-IN");
+  });
+
+  it("omits the language field entirely when none was resolved", async () => {
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ ok: true, transcript: "cache hit" }), {
+          status: 200,
+        }),
+    );
+    stubSttGlobals(fetchImpl as unknown as typeof fetch);
+    const recognizer = createCloudRecognizer()!;
+    recognizer.start({ onFinal: vi.fn(), onError: vi.fn(), onEnd: vi.fn() });
+    await new Promise((r) => setTimeout(r, 0));
+    recognizer.stop();
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+
+    const call = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    const form = call[1].body as FormData;
+    expect(form.get("language")).toBeNull();
+  });
+
   it("uploads the recording on stop() and reports the final transcript", async () => {
     const fetchImpl = vi.fn(
       async () =>

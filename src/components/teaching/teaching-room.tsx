@@ -106,7 +106,7 @@ export function TeachingRoom({
   voiceCloud?: VoiceCloudStatus;
 }) {
   const reduce = useReducedMotion();
-  const voice = useVoiceController(voiceCloud);
+  const voice = useVoiceController(voiceCloud, initialSession.language);
 
   const [phase, setPhase] = useState<Phase>("loading");
   const [step, setStep] = useState<TeachingStepView | null>(null);

@@ -21,7 +21,7 @@ import type {
  * discarded the moment the upload settles.
  */
 
-export function createCloudSynthesizer(): Synthesizer | null {
+export function createCloudSynthesizer(language?: string): Synthesizer | null {
   if (typeof window === "undefined" || typeof Audio === "undefined") {
     return null;
   }
@@ -61,7 +61,7 @@ export function createCloudSynthesizer(): Synthesizer | null {
           response = await fetch("/api/voice/speak", {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ text }),
+            body: JSON.stringify({ text, language }),
             signal: controller.signal,
           });
         } catch (cause) {
@@ -113,7 +113,7 @@ function describeFetchError(cause: unknown): string {
 /** Smallest recognizable clip — anything shorter is almost certainly noise. */
 const MIN_CLIP_BYTES = 400;
 
-export function createCloudRecognizer(): Recognizer | null {
+export function createCloudRecognizer(language?: string): Recognizer | null {
   if (
     typeof window === "undefined" ||
     typeof MediaRecorder === "undefined" ||
@@ -193,6 +193,7 @@ export function createCloudRecognizer(): Recognizer | null {
 
     const form = new FormData();
     form.append("audio", blob, "answer.webm");
+    if (language) form.append("language", language);
     const controller = new AbortController();
     uploadController = controller;
 

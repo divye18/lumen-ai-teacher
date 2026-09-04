@@ -113,6 +113,26 @@ describe("POST /api/voice/speak", () => {
     expect(new TextDecoder().decode(buf)).not.toMatch(/api[_-]?key/i);
   });
 
+  it("forwards a supplied language straight to the provider's synthesize() call", async () => {
+    getUser.mockResolvedValueOnce(ok({ id: "u1", email: null }));
+    const synthesize = vi.fn(async () =>
+      ok({
+        audio: new TextEncoder().encode("fake-audio").buffer,
+        mimeType: "audio/mpeg",
+      }),
+    );
+    getConfiguredTextToSpeech.mockReturnValueOnce({
+      id: "elevenlabs:test",
+      synthesize,
+    });
+    await POST(post({ text: "नमस्ते", language: "hi-IN" }));
+    expect(synthesize).toHaveBeenCalledWith({
+      text: "नमस्ते",
+      voice: undefined,
+      language: "hi-IN",
+    });
+  });
+
   it("does not call the provider before validating input (no wasted/duplicate calls)", async () => {
     getUser.mockResolvedValueOnce(ok({ id: "u1", email: null }));
     await POST(post({ text: "" }));

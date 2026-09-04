@@ -135,4 +135,33 @@ describe("POST /api/voice/transcribe", () => {
       expect.objectContaining({ mimeType: "audio/webm" }),
     );
   });
+
+  it("forwards a supplied language form field straight to the provider's transcribe() call", async () => {
+    getUser.mockResolvedValueOnce(ok({ id: "u1", email: null }));
+    const transcribe = vi.fn(async () =>
+      ok({ text: "namaste", language: "hi" }),
+    );
+    getConfiguredSpeechToText.mockReturnValueOnce({
+      id: "deepgram:test",
+      transcribe,
+    });
+    await POST(multipart({ audio: CLIP, language: "hi-IN" }));
+    expect(transcribe).toHaveBeenCalledWith(
+      expect.objectContaining({ language: "hi-IN" }),
+    );
+  });
+
+  it("omits language when no form field was sent — no regression for existing callers", async () => {
+    getUser.mockResolvedValueOnce(ok({ id: "u1", email: null }));
+    const transcribe = vi.fn(async () =>
+      ok({ text: "cache hit", language: "en" }),
+    );
+    getConfiguredSpeechToText.mockReturnValueOnce({
+      id: "deepgram:test",
+      transcribe,
+    });
+    await POST(multipart({ audio: CLIP }));
+    const call = transcribe.mock.calls[0] as unknown as [{ language?: string }];
+    expect(call[0].language).toBeUndefined();
+  });
 });

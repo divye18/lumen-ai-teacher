@@ -15,7 +15,8 @@ export const dynamic = "force-dynamic";
  * POST /api/voice/transcribe
  *
  * multipart/form-data:
- *   audio — the recorded answer, a short clip (required)
+ *   audio    — the recorded answer, a short clip (required)
+ *   language — BCP-47 tag, already resolved from `session.language` (optional)
  *
  * Returns ONLY the transcript text — no provider metadata, no confidence
  * score, no language tag beyond what the client already knows it asked for.
@@ -76,9 +77,18 @@ export async function POST(request: Request): Promise<Response> {
       return jsonError(new ProviderNotConfiguredError("speech-to-text"));
     }
 
+    // Optional BCP-47 tag, already resolved from `session.language` by the
+    // client — this route never infers language from anything else.
+    const languageField = form.get("language");
+    const language =
+      typeof languageField === "string" && languageField.trim().length > 0
+        ? languageField.trim().slice(0, 20)
+        : undefined;
+
     const result = await stt.transcribe({
       audio: bytes.buffer as ArrayBuffer,
       mimeType: file.type,
+      language,
     });
     if (!result.ok) return jsonError(result.error);
 

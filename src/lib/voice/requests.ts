@@ -12,6 +12,8 @@ export const speakRequestSchema = z.object({
   text: z.string().min(1).max(MAX_SPEAK_CHARS),
   /** Optional provider-known voice id override. */
   voice: z.string().min(1).max(100).optional(),
+  /** BCP-47 tag, already resolved from `session.language` by the client. */
+  language: z.string().min(2).max(20).optional(),
 });
 export type SpeakRequest = z.infer<typeof speakRequestSchema>;
 

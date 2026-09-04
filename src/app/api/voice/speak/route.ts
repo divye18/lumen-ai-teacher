@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 /**
  * POST /api/voice/speak
  *
- * Body: { text: string, voice?: string }
+ * Body: { text: string, voice?: string, language?: string }
  *
  * Speaks TEXT ALREADY APPROVED by the teaching engine — this route never
  * generates content, it only converts existing text to audio. Returns raw
@@ -47,6 +47,10 @@ export async function POST(request: Request): Promise<Response> {
     const result = await tts.synthesize({
       text: parsed.data.text,
       voice: parsed.data.voice,
+      // Passed through the existing `SynthesizeOptions.language` field.
+      // Whether a given TTS provider actually honours it is up to the
+      // provider adapter — this route never invents provider behaviour.
+      language: parsed.data.language,
     });
     if (!result.ok) return jsonError(result.error);
 
