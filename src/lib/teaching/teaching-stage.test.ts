@@ -127,4 +127,25 @@ describe("deriveTeachingStage", () => {
       JSON.stringify(deriveTeachingStage(i)),
     );
   });
+
+  it("shows a 'conversing' stage while a learner question is in flight", () => {
+    const teaching = deriveTeachingStage(
+      input({ phase: "teaching", conversationBusy: true }),
+    );
+    expect(teaching.stage).toBe("conversing");
+    expect(teaching.presence).toBe("THINKING");
+    expect(teaching.statusLine).toMatch(/thinking about your question/i);
+
+    const question = deriveTeachingStage(
+      input({ phase: "question", conversationBusy: true }),
+    );
+    expect(question.stage).toBe("conversing");
+  });
+
+  it("does not let a learner question take over the post-answer sequence", () => {
+    const s = deriveTeachingStage(
+      input({ phase: "result", resultBeat: 1, conversationBusy: true }),
+    );
+    expect(s.stage).toBe("updating");
+  });
 });

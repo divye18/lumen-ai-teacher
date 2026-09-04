@@ -23,6 +23,7 @@ export type TeachingStage =
   | "evaluating"
   | "updating"
   | "adapting"
+  | "conversing"
   | "recap"
   | "complete"
   | "error";
@@ -50,6 +51,8 @@ export interface TeachingStageInput {
   firstLoad: boolean;
   /** Voice controller state, when voice is active. */
   voiceState?: "IDLE" | "LISTENING" | "PROCESSING" | "SPEAKING" | "ERROR";
+  /** The learner asked a question and Lumen is answering it (side channel). */
+  conversationBusy?: boolean;
 }
 
 export interface TeachingStageView {
@@ -105,6 +108,11 @@ const STAGE_META: Record<
     statusLine: "Lumen is changing how it teaches next",
     canAdvance: true,
   },
+  conversing: {
+    presence: "THINKING",
+    statusLine: "Lumen is thinking about your question",
+    canAdvance: false,
+  },
   recap: {
     presence: "RECAP",
     statusLine: "Lumen is pulling the ideas together",
@@ -154,6 +162,15 @@ export function deriveTeachingStage(
 function resolveStage(input: TeachingStageInput): TeachingStage {
   if (input.phase === "error") return "error";
   if (input.phase === "complete") return "complete";
+
+  // A learner question in flight takes over the presence during teaching /
+  // questioning — but never during the post-answer sequence.
+  if (
+    input.conversationBusy &&
+    (input.phase === "teaching" || input.phase === "question")
+  ) {
+    return "conversing";
+  }
 
   if (input.phase === "loading") return "preparing";
 

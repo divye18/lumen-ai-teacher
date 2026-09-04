@@ -8,6 +8,7 @@ import { LearningSignalCard } from "@/components/learning/learning-signal-card";
 import { WhyNextCard } from "@/components/learning/why-next-card";
 import { TeachingRoomMap } from "@/components/graph/teaching-room-map";
 import { EvaluationResult } from "@/components/teaching/evaluation-result";
+import { AskLumen } from "@/components/teaching/ask-lumen";
 import {
   LearnerStatePanel,
   type LearnerStateSnapshot,
@@ -121,6 +122,8 @@ export function TeachingRoom({
   const [teachingRevealed, setTeachingRevealed] = useState(false);
   /** Which beat of the post-answer sequence is showing (0..2). */
   const [resultBeat, setResultBeat] = useState(0);
+  /** The learner asked a question and Lumen is answering it (side channel). */
+  const [conversationBusy, setConversationBusy] = useState(false);
   /**
    * The representation from the most recent teaching step. Held through the
    * question + result phases so the change to the next representation is a
@@ -129,6 +132,9 @@ export function TeachingRoom({
   const [heldVisual, setHeldVisual] = useState<{
     directive: VisualDirective;
     intent: string | null;
+    rationale: string | null;
+    /** "teaching" = from the current step; "conversation" = adapted by a question. */
+    from: "teaching" | "conversation";
   } | null>(null);
   const [answerLog, setAnswerLog] = useState<AnswerLogEntry[]>([]);
   const [graphState, setGraphState] = useState<KnowledgeGraphView | null>(
@@ -231,6 +237,8 @@ export function TeachingRoom({
         setHeldVisual({
           directive: s.content.visual,
           intent: s.content.visualIntent,
+          rationale: s.content.visualRationale,
+          from: "teaching",
         });
       }
       setPhase("teaching");
@@ -430,6 +438,7 @@ export function TeachingRoom({
     classification: lastClassification,
     firstLoad: step === null,
     voiceState: voiceEnabled ? voice.state : undefined,
+    conversationBusy,
   });
   const presence = teachingStage.presence;
 
@@ -437,10 +446,10 @@ export function TeachingRoom({
   // the switch to the next representation is a cross-fade the learner watches.
   const activeVisual = heldVisual?.directive ?? null;
   const visualMuted = phase !== "teaching";
-  const visualIntentText =
-    phase === "teaching"
-      ? (step?.content?.visualIntent ?? heldVisual?.intent ?? null)
-      : (heldVisual?.intent ?? null);
+  // `heldVisual` is the single source of truth for what's on screen — it holds
+  // both the teaching step's visual and any conversationally-adapted one.
+  const visualIntentText = heldVisual?.intent ?? null;
+  const visualRationaleText = heldVisual?.rationale ?? null;
   const previousRepresentationLabel = heldVisual
     ? visualModeLabel(heldVisual.directive.mode)
     : null;
@@ -519,9 +528,10 @@ export function TeachingRoom({
                 }
                 muted={visualMuted}
               />
-              {phase === "teaching" && step?.content?.visualRationale ? (
+              {(phase === "teaching" || heldVisual?.from === "conversation") &&
+              visualRationaleText ? (
                 <p className="px-1 text-[11px] leading-snug text-[var(--color-accent)]">
-                  {step.content.visualRationale}
+                  {visualRationaleText}
                 </p>
               ) : null}
             </div>
@@ -681,6 +691,25 @@ export function TeachingRoom({
               ) : null}
             </motion.div>
           </div>
+
+          {(phase === "teaching" || phase === "question") &&
+          currentConceptKey ? (
+            <AskLumen
+              sessionId={sessionId}
+              conceptTitle={currentConceptTitle ?? currentConceptKey}
+              onBusyChange={setConversationBusy}
+              onVisual={(r) => {
+                if (r.visual) {
+                  setHeldVisual({
+                    directive: r.visual,
+                    intent: r.visualIntent,
+                    rationale: r.visualRationale,
+                    from: "conversation",
+                  });
+                }
+              }}
+            />
+          ) : null}
         </main>
 
         {/* Right rail: learning signal + timeline + live map */}
