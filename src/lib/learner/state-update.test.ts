@@ -127,6 +127,76 @@ describe("applyInteractionOutcome", () => {
     expect(out.misconceptionPlan.strengthens).toHaveLength(1);
   });
 
+  it("counts a spaced-review relapse (RESOLVED -> ACTIVE via strengthen) immediately, not one turn late", () => {
+    const existing: ExistingMisconception[] = [
+      {
+        id: "m1",
+        category: "page-fault-is-a-crash",
+        description: "Thinks the process dies on a page fault.",
+        confidence: 0.6,
+        status: "RESOLVED",
+        detections: 2,
+      },
+    ];
+    const out = applyInteractionOutcome({
+      concept: { ...concept, masteryScore: 0.7 },
+      evaluation: evaluation({
+        classification: "INCORRECT",
+        correctnessScore: 0.2,
+        misconceptionCandidates: [
+          {
+            category: "page fault is a crash",
+            description: "Still says the process dies.",
+            confidence: 0.7,
+          },
+        ],
+      }),
+      questionDifficulty: 3,
+      strategyUsed: "formal",
+      existingMisconceptions: existing,
+    });
+    // Routed to strengthens (reactivating the same row), never a duplicate.
+    expect(out.misconceptionPlan.strengthens).toHaveLength(1);
+    expect(out.misconceptionPlan.strengthens[0].id).toBe("m1");
+    expect(out.misconceptionPlan.creates).toHaveLength(0);
+    // The reactivated row is counted THIS turn, not after the next reload.
+    expect(out.masteryPatch.misconceptionCount).toBe(1);
+  });
+
+  it("does not double-count a strengthen on an already-ACTIVE/IMPROVING row", () => {
+    const existing: ExistingMisconception[] = [
+      {
+        id: "m1",
+        category: "page-fault-is-a-crash",
+        description: "Thinks the process dies on a page fault.",
+        confidence: 0.6,
+        status: "ACTIVE",
+        detections: 1,
+      },
+    ];
+    const out = applyInteractionOutcome({
+      concept: { ...concept, masteryScore: 0.7 },
+      evaluation: evaluation({
+        classification: "INCORRECT",
+        correctnessScore: 0.2,
+        misconceptionCandidates: [
+          {
+            category: "page fault is a crash",
+            description: "Still says the process dies.",
+            confidence: 0.7,
+          },
+        ],
+      }),
+      questionDifficulty: 3,
+      strategyUsed: "formal",
+      existingMisconceptions: existing,
+    });
+    expect(out.misconceptionPlan.strengthens).toHaveLength(1);
+    // Preserved: an ACTIVE/IMPROVING row was already counted via the
+    // non-RESOLVED filter — the relapse credit must not add a second count.
+    expect(out.masteryPatch.misconceptionCount).toBe(1);
+  });
+
   it("records the strategy that was used as the preferred strategy", () => {
     const out = applyInteractionOutcome({
       concept,

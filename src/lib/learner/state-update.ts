@@ -112,9 +112,22 @@ export function applyInteractionOutcome(
     existing: input.existingMisconceptions,
   });
 
+  // A strengthen that matched a previously-RESOLVED row (a relapse — see
+  // spaced review) reactivates it to ACTIVE via the store's strengthen()
+  // write, but `existingMisconceptions` here is a snapshot from BEFORE that
+  // write. Without this, such a row is undercounted for exactly this turn:
+  // still RESOLVED in the snapshot, and not a `.creates` either.
+  const existingById = new Map(
+    input.existingMisconceptions.map((m) => [m.id, m]),
+  );
+  const relapsedCount = misconceptionPlan.strengthens.filter(
+    (s) => existingById.get(s.id)?.status === "RESOLVED",
+  ).length;
+
   const activeAfter =
     input.existingMisconceptions.filter((m) => m.status !== "RESOLVED").length +
-    misconceptionPlan.creates.length;
+    misconceptionPlan.creates.length +
+    relapsedCount;
 
   const attemptCount = current.attemptCount + 1;
   const correctCount = current.correctCount + (cls === "CORRECT" ? 1 : 0);
