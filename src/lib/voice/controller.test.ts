@@ -155,4 +155,64 @@ describe("VoiceController — state machine", () => {
     expect(c.getState()).toBe("ERROR");
     expect(rec.stop).toHaveBeenCalled();
   });
+
+  it("stopSpeaking() cancels the synthesizer and returns to IDLE (speak cancellation)", () => {
+    const synth = fakeSynth();
+    const c = new VoiceController({ recognizer: null, synthesizer: synth });
+    c.speak("A long explanation the learner wants to skip.");
+    expect(c.getState()).toBe("SPEAKING");
+    c.stopSpeaking();
+    expect(synth.cancel).toHaveBeenCalledTimes(1);
+    expect(c.getState()).toBe("IDLE");
+  });
+
+  it("stopListening() asks the recognizer to stop but stays LISTENING until the final result arrives", () => {
+    const rec = fakeRecognizer();
+    const c = new VoiceController({ recognizer: rec, synthesizer: null });
+    c.startListening();
+    c.stopListening();
+    expect(rec.stop).toHaveBeenCalledTimes(1);
+    expect(c.getState()).toBe("LISTENING");
+    rec.emitFinal("done");
+    expect(c.getState()).toBe("PROCESSING");
+  });
+
+  it("stopListening() while not listening is a no-op — never crashes", () => {
+    const rec = fakeRecognizer();
+    const c = new VoiceController({ recognizer: rec, synthesizer: null });
+    expect(() => c.stopListening()).not.toThrow();
+    expect(rec.stop).not.toHaveBeenCalled();
+  });
+
+  it("re-issuing speak() while already SPEAKING replaces the utterance, never stacking two (duplicate-speech prevention)", () => {
+    const synth = fakeSynth();
+    const speakSpy = vi.fn(synth.speak.bind(synth));
+    synth.speak = speakSpy;
+    const captions: { text: string; spokenChars: number }[] = [];
+    const c = new VoiceController({
+      recognizer: null,
+      synthesizer: synth,
+      events: { onCaption: (p) => captions.push(p) },
+    });
+    c.speak("first line");
+    c.speak("second line");
+    expect(c.getState()).toBe("SPEAKING");
+    // The most recent caption reflects the latest utterance, not a stacked one.
+    expect(captions.at(-1)?.text).toBe("second line");
+  });
+
+  it("abort() stops any in-progress recognition and synthesis and clears an ERROR state", () => {
+    const rec = fakeRecognizer();
+    const synth = fakeSynth();
+    const c = new VoiceController({
+      recognizer: rec,
+      synthesizer: synth,
+      events: {},
+    });
+    c.startListening();
+    rec.emitError("boom");
+    expect(c.getState()).toBe("ERROR");
+    c.abort();
+    expect(c.getState()).toBe("IDLE");
+  });
 });
