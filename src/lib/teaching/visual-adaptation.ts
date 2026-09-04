@@ -44,6 +44,12 @@ export interface VisualIntentContext {
   strategy: string;
   /** Concept importance 1–5 (load-bearing concepts get a gentler pace). */
   conceptImportance: number;
+  /**
+   * Adaptive-teacher-memory bias. Only consulted when the base rules are
+   * neutral (steady progress) — the misconception / incorrect-answer / early
+   * guards stay authoritative. `null` = no personalization evidence.
+   */
+  personalizationBias?: "concrete" | "reframe" | "connect" | null;
 }
 
 export interface VisualIntentResult {
@@ -53,6 +59,8 @@ export interface VisualIntentResult {
   signal: LearnerVisualSignal;
   /** Learner-facing educational reason. Never chain-of-thought. */
   rationale: string;
+  /** True when adaptive teacher memory changed the framing from the baseline. */
+  personalized: boolean;
 }
 
 const INTENT_LABEL: Record<VisualIntent, string> = {
@@ -85,9 +93,56 @@ export function visualModeLabel(mode: VisualMode | string): string {
   return MODE_LABEL[mode] ?? "Visual";
 }
 
+type BaseVisualIntent = Omit<VisualIntentResult, "personalized">;
+
+const BIAS_INTENT: Record<
+  NonNullable<VisualIntentContext["personalizationBias"]>,
+  { intent: VisualIntent; complexity: VisualComplexity; rationale: string }
+> = {
+  concrete: {
+    intent: "concrete",
+    complexity: "minimal",
+    rationale: "Starting concrete — worked examples have helped you before.",
+  },
+  reframe: {
+    intent: "reframe",
+    complexity: "standard",
+    rationale:
+      "Showing this as a visual model — that framing tends to land for you.",
+  },
+  connect: {
+    intent: "connect",
+    complexity: "standard",
+    rationale:
+      "Connecting the ideas — you're solid on the definitions, so this is about using them.",
+  },
+};
+
+/**
+ * The educational intent behind the representation. Adaptive teacher memory
+ * (`personalizationBias`) only overrides the *neutral* base outcome
+ * (`reinforce`) — every guard rule (misconception, wrong answer, early/low)
+ * stays authoritative.
+ */
 export function deriveVisualIntent(
   ctx: VisualIntentContext,
 ): VisualIntentResult {
+  const base = baseVisualIntent(ctx);
+  const bias = ctx.personalizationBias ?? null;
+  if (bias && base.intent === "reinforce") {
+    const b = BIAS_INTENT[bias];
+    return {
+      intent: b.intent,
+      complexity: ctx.strategy === "visual-first" ? "rich" : b.complexity,
+      signal: base.signal,
+      rationale: b.rationale,
+      personalized: true,
+    };
+  }
+  return { ...base, personalized: false };
+}
+
+function baseVisualIntent(ctx: VisualIntentContext): BaseVisualIntent {
   const signal = visualSignalFromState({
     masteryPoints: ctx.masteryPoints,
     lastClassification: ctx.lastClassification,

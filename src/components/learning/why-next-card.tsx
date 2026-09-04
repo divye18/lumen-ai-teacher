@@ -12,9 +12,15 @@ import { cn } from "@/lib/ui/cn";
  */
 export function WhyNextCard({
   explanation,
+  personalizationNote = null,
   className,
 }: {
   explanation: NextStepExplanation;
+  /**
+   * Adaptive teacher memory: one sentence when a cross-session learning signal
+   * shaped this step. Rendered as a distinct, quieter line beneath the reason.
+   */
+  personalizationNote?: string | null;
   className?: string;
 }) {
   const reduce = useReducedMotion();
@@ -50,6 +56,11 @@ export function WhyNextCard({
       <p className="mt-0.5 text-[12px] leading-snug text-[var(--color-ink-muted)]">
         {explanation.reason}
       </p>
+      {personalizationNote ? (
+        <p className="mt-2 border-t border-[var(--color-border)] pt-2 text-[11px] leading-snug text-[var(--color-accent)]">
+          {personalizationNote}
+        </p>
+      ) : null}
     </motion.div>
   );
 }

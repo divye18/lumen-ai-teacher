@@ -15,6 +15,11 @@ export {
   type LearnerProfileRow,
 } from "./learner-profile-store";
 export {
+  createLearningProfileStore,
+  type LearningProfileStore,
+  type LearningProfileRow,
+} from "./learning-profile-store";
+export {
   createMasteryStore,
   type MasteryStore,
   type ConceptMasteryRow,

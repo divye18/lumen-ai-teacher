@@ -5,6 +5,7 @@ import { ContinueLearning } from "@/components/dashboard/continue-learning";
 import { DemoCard } from "@/components/dashboard/demo-card";
 import { EmptyStudio } from "@/components/dashboard/empty-studio";
 import { LearningLens } from "@/components/dashboard/learning-lens";
+import { LearnerMemory } from "@/components/dashboard/learner-memory";
 import { LearningMomentum } from "@/components/dashboard/learning-momentum";
 import { MisconceptionRadar } from "@/components/dashboard/misconception-radar";
 import { RecommendedAction } from "@/components/dashboard/recommended-action";
@@ -62,6 +63,8 @@ export default async function StudioPage() {
       <KnowledgeGraphPanel graph={overview.graph} />
 
       <LearningLens observations={overview.observations} />
+
+      <LearnerMemory memory={overview.learnerMemory} />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <MisconceptionRadar misconceptions={overview.misconceptions} />

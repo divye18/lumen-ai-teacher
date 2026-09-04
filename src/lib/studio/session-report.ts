@@ -12,7 +12,7 @@ import {
   type TeachingAnswerRow,
 } from "@/lib/db/repositories";
 import { masteryBandLabel, scoreToPoints } from "@/lib/teaching/mastery";
-import { buildStrategyMemory } from "@/lib/learner";
+import { buildStrategyMemory, deriveLearningProfile } from "@/lib/learner";
 import { getKnowledgeGraph, type KnowledgeGraphView } from "@/lib/graph";
 import { SessionNotFoundError } from "@/lib/errors";
 import { err, ok, type Result } from "@/lib/result";
@@ -61,6 +61,11 @@ export interface SessionReport {
   conceptsReinforced: number;
   /** Evidence-backed learning-pattern observations for this session. */
   learningPattern: Observation[];
+  /**
+   * One adaptive-teacher-memory insight: the strongest cross-session behavioural
+   * signal refreshed by this session's evidence. `null` when evidence is thin.
+   */
+  personalizationInsight: string | null;
   /** Graph-aware recommended next concept. */
   nextBestMove: {
     title: string;
@@ -254,6 +259,25 @@ export async function getSessionReport(
     graph,
   });
 
+  const sessionProfile = deriveLearningProfile({
+    answers,
+    questions,
+    interactions: sessionInteractions,
+    concepts: outcomes.map((o) => ({
+      conceptKey: o.key,
+      title: o.title,
+      masteryPoints: o.masteryAfter,
+      attempts: 1,
+      misconceptionCount: 0,
+    })),
+    misconceptions: [],
+    strategyMemory,
+  });
+  const personalizationInsight =
+    [...sessionProfile.signals].sort(
+      (a, b) => b.evidence.confidence - a.evidence.confidence,
+    )[0]?.summary ?? null;
+
   const masteryGained = outcomes
     .filter((o) => o.delta > 0)
     .reduce((s, o) => s + o.delta, 0);
@@ -332,6 +356,7 @@ export async function getSessionReport(
     masteryGained: Math.round(masteryGained),
     conceptsReinforced,
     learningPattern,
+    personalizationInsight,
     nextBestMove,
     graph,
     trajectories: outcomes

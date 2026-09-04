@@ -28,7 +28,12 @@ import {
   applyInteractionOutcome,
   normalizeCategory,
   type ExistingMisconception,
+  type PersonalizationAdjustments,
 } from "@/lib/learner";
+import {
+  loadPersonalization,
+  recomputeLearningProfile,
+} from "@/lib/learner/learning-profile-service";
 import {
   createTeachingEngine,
   deriveVisualIntent,
@@ -138,6 +143,7 @@ const QUESTION_ACTIONS = new Set(["ASK", "ASSESS"]);
 function visualIntentContext(
   facts: PolicyFacts,
   action: string,
+  personalizationBias: PersonalizationAdjustments["visualBias"] = null,
 ): VisualIntentContext {
   return {
     masteryPoints: facts.masteryPoints,
@@ -150,6 +156,41 @@ function visualIntentContext(
     questionKind: facts.lastQuestionKind,
     strategy: facts.currentStrategy,
     conceptImportance: facts.conceptImportance,
+    personalizationBias,
+  };
+}
+
+/**
+ * Adaptive teacher memory: open a brand-new concept with a worked example
+ * instead of an abstract explanation when the learner's cross-session history
+ * shows that helps. Deterministic and narrow — only the very first teaching
+ * turn on a concept, and only when the base policy chose a plain EXPLAIN.
+ */
+function maybeNudgeToExample(
+  decision: ResolvedTeachingDecision,
+  personalization: PersonalizationAdjustments,
+  facts: PolicyFacts,
+): { decision: ResolvedTeachingDecision; note: string | null } {
+  const eligible =
+    decision.action === "EXPLAIN" &&
+    decision.source === "policy" &&
+    personalization.preferConcreteExample &&
+    facts.attempts === 0 &&
+    facts.explanationsSinceQuestion === 0;
+  if (!eligible) return { decision, note: null };
+  const note =
+    personalization.note ??
+    "Starting with a concrete example — that has helped you recover faster before.";
+  return {
+    decision: {
+      ...decision,
+      action: "EXAMPLE",
+      adaptationNarrative: [
+        ...decision.adaptationNarrative,
+        "Opening with a worked example — your history shows that lands faster for you.",
+      ],
+    },
+    note,
   };
 }
 
@@ -242,6 +283,7 @@ export function createTeachingOrchestrator(
           reason:
             "You've worked through every concept — Lumen has a full picture of where you stand.",
         },
+        personalizationNote: null,
       },
       content: null,
       question: null,
@@ -296,6 +338,7 @@ export function createTeachingOrchestrator(
       adaptationNarrative: decision.adaptationNarrative,
       overrides: decision.overrides,
       whyThisNext: null,
+      personalizationNote: null,
     };
   }
 
@@ -313,9 +356,11 @@ export function createTeachingOrchestrator(
       conceptTitle: string;
       nextConceptTitle?: string | null;
       misconceptionDetectionCount?: number;
+      personalizationNote?: string | null;
     },
   ): DecisionView {
     const view = toDecisionView(decision);
+    view.personalizationNote = opts.personalizationNote ?? null;
     view.whyThisNext = explainNextStep({
       action: decision.action,
       difficultyDirection: decision.difficultyDirection,
@@ -636,6 +681,11 @@ export function createTeachingOrchestrator(
       if (!loaded.ok) return loaded;
       const { data, plan, currentConceptId } = loaded.value;
 
+      const { adjustments: personalization } = await loadPersonalization(
+        deps.db,
+        deps.userId,
+      );
+
       const finishSession = async (): Promise<void> => {
         if (data.session.status === "COMPLETED") return;
         const ending = await captureBaseline(data.lesson.id);
@@ -654,6 +704,13 @@ export function createTeachingOrchestrator(
           endedAt: new Date().toISOString(),
         });
         await lessons.update({ id: data.lesson.id, status: "COMPLETED" });
+        // Fresh evidence just landed — refresh the cross-session learning
+        // profile so the next session personalises from it. Best-effort.
+        try {
+          await recomputeLearningProfile(deps.db, deps.userId);
+        } catch {
+          // a stale profile is fine; it recomputes lazily on next read
+        }
       };
 
       if (
@@ -766,7 +823,12 @@ export function createTeachingOrchestrator(
           : 0;
         const seedKind =
           facts.lastQuestionKind ?? questionKindForMastery(masteryPoints);
-        const kind = nextQuestionKind(seedKind, decision.difficultyDirection);
+        let kind = nextQuestionKind(seedKind, decision.difficultyDirection);
+        // Adaptive teacher memory: recall is solid, the gap is in application —
+        // deliberately seed an applied question instead of another definition.
+        if (personalization.shiftTowardApplication && kind === "CONCEPTUAL") {
+          kind = "APPLICATION";
+        }
 
         // Priority: deterministic structured assessment when the LLM is
         // unavailable and a safe structured question exists; otherwise the
@@ -787,6 +849,7 @@ export function createTeachingOrchestrator(
                 usedPrompts: data.recentQuestions
                   .filter((q) => q.concept_key === engineConcept.key)
                   .map((q) => q.prompt),
+                preferFormat: personalization.targetFormatWeakness,
                 graph: buildTemplateGraphContext(
                   data.graphView,
                   engineConcept.key,
@@ -878,6 +941,7 @@ export function createTeachingOrchestrator(
             decision: nextDecisionView(decision, facts, {
               conceptTitle: engineConcept.title,
               misconceptionDetectionCount: maxDetections || undefined,
+              personalizationNote: personalization.note,
             }),
             content: null,
             question: {
@@ -959,6 +1023,7 @@ export function createTeachingOrchestrator(
           decision: nextDecisionView(decision, facts, {
             conceptTitle: engineConcept.title,
             misconceptionDetectionCount: maxDetections || undefined,
+            personalizationNote: personalization.note,
           }),
           content: null,
           question: {
@@ -982,11 +1047,18 @@ export function createTeachingOrchestrator(
       }
 
       // ── teaching content actions ───────────────────────────────────
+      // Adaptive teacher memory may open a fresh concept with a worked example.
+      const nudge = maybeNudgeToExample(decision, personalization, facts);
+      const servedDecision = nudge.decision;
+      const personalizationNote =
+        nudge.note ??
+        (personalization.visualBias ? personalization.note : null);
+
       const content = await generateTeachingContent({
         llm: deps.llm,
-        action: decision.action,
-        strategy: decision.strategy,
-        difficultyDirection: decision.difficultyDirection,
+        action: servedDecision.action,
+        strategy: servedDecision.strategy,
+        difficultyDirection: servedDecision.difficultyDirection,
         concept: {
           key: engineConcept.key,
           title: engineConcept.title,
@@ -1005,51 +1077,60 @@ export function createTeachingOrchestrator(
         conceptId: currentConceptId ?? undefined,
         role: "TEACHER",
         interactionType:
-          ACTION_TO_INTERACTION_TYPE[decision.action] ?? "EXPLANATION",
+          ACTION_TO_INTERACTION_TYPE[servedDecision.action] ?? "EXPLANATION",
         content: content.value.body,
         metadata: {
           conceptKey: engineConcept.key,
-          action: decision.action,
-          strategy: decision.strategy,
+          action: servedDecision.action,
+          strategy: servedDecision.strategy,
           contentSource: content.value.source,
+          ...(nudge.note ? { personalized: "example-open" } : {}),
         },
       });
 
-      if (decision.action === "RETEACH" && currentConceptId) {
+      if (servedDecision.action === "RETEACH" && currentConceptId) {
         await mastery.upsert({
           userId: deps.userId,
           conceptId: currentConceptId,
-          preferredStrategy: decision.strategy,
+          preferredStrategy: servedDecision.strategy,
         });
       }
       await lessons.setConceptStatus(data.currentConcept.id, "TEACHING");
       await sessions.updateTeaching({
         id: data.session.id,
-        currentAction: decision.action,
+        currentAction: servedDecision.action,
       });
 
       // Deterministic visual: no model output touches the renderer. The visual
       // intent names WHY this representation (educational, learner-facing); the
       // resolver picks the concrete directive from that intent's signal.
       const visualIntent = deriveVisualIntent(
-        visualIntentContext(facts, decision.action),
+        visualIntentContext(
+          facts,
+          servedDecision.action,
+          personalization.visualBias,
+        ),
       );
       const resolvedVisual = resolveVisual({
         conceptKey: engineConcept.key,
         title: engineConcept.title,
         summary: content.value.body || engineConcept.summary,
-        action: decision.action,
-        strategy: decision.strategy,
+        action: servedDecision.action,
+        strategy: servedDecision.strategy,
         learnerSignal: visualIntent.signal,
       });
       const showVisual =
-        resolvedVisual.source !== "text" || decision.action === "VISUALIZE";
+        resolvedVisual.source !== "text" ||
+        servedDecision.action === "VISUALIZE";
 
       return ok({
         sessionId: data.session.id,
-        decision: nextDecisionView(decision, facts, {
+        decision: nextDecisionView(servedDecision, facts, {
           conceptTitle: engineConcept.title,
           misconceptionDetectionCount: maxDetections || undefined,
+          personalizationNote:
+            personalizationNote ??
+            (visualIntent.personalized ? visualIntent.rationale : null),
         }),
         content: {
           title: content.value.title,
@@ -1370,6 +1451,10 @@ export function createTeachingOrchestrator(
       const reloaded = await loadContext(input.sessionId);
       if (!reloaded.ok) return reloaded;
       const next = reloaded.value;
+      const { adjustments: personalization } = await loadPersonalization(
+        deps.db,
+        deps.userId,
+      );
       const nextFacts = buildPolicyFacts(next.data);
       const nextDecision = await engine.decide({
         facts: nextFacts,
@@ -1395,7 +1480,11 @@ export function createTeachingOrchestrator(
           plan.concepts,
         );
         const nextVisualIntent = deriveVisualIntent(
-          visualIntentContext(nextFacts, nextDecision.action),
+          visualIntentContext(
+            nextFacts,
+            nextDecision.action,
+            personalization.visualBias,
+          ),
         );
         const nextResolved = resolveVisual({
           conceptKey: nextEngineConcept.key,
@@ -1448,6 +1537,7 @@ export function createTeachingOrchestrator(
         nextDecision: nextDecisionView(nextDecision, nextFacts, {
           conceptTitle: next.data.currentConcept.title,
           misconceptionDetectionCount: misconceptionDetail?.detectionCount,
+          personalizationNote: personalization.note,
         }),
         nextRepresentation,
         progress: progressOf(

@@ -94,6 +94,40 @@ export interface Database {
         Relationships: [];
       };
 
+      learner_learning_profiles: {
+        Row: {
+          id: Uuid;
+          user_id: Uuid;
+          signals: Json;
+          evidence: Json;
+          sample_size: number;
+          computed_at: Timestamptz;
+          created_at: Timestamptz;
+          updated_at: Timestamptz;
+        };
+        Insert: {
+          id?: Uuid;
+          user_id: Uuid;
+          signals?: Json;
+          evidence?: Json;
+          sample_size?: number;
+          computed_at?: Timestamptz;
+          created_at?: Timestamptz;
+          updated_at?: Timestamptz;
+        };
+        Update: {
+          id?: Uuid;
+          user_id?: Uuid;
+          signals?: Json;
+          evidence?: Json;
+          sample_size?: number;
+          computed_at?: Timestamptz;
+          created_at?: Timestamptz;
+          updated_at?: Timestamptz;
+        };
+        Relationships: [];
+      };
+
       documents: {
         Row: {
           id: Uuid;

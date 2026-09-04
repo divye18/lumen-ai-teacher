@@ -566,7 +566,15 @@ export function TeachingRoom({
               transition={{ duration: reduce ? 0 : 0.22 }}
             >
               {stepWhyNext ? (
-                <WhyNextCard explanation={stepWhyNext} className="mb-4" />
+                <WhyNextCard
+                  explanation={stepWhyNext}
+                  personalizationNote={
+                    (phase === "teaching" || phase === "question") && step
+                      ? step.decision.personalizationNote
+                      : null
+                  }
+                  className="mb-4"
+                />
               ) : null}
 
               {phase === "teaching" && step?.content ? (

@@ -72,6 +72,18 @@ export type LearnerProfileUpsertInput = z.infer<
   typeof learnerProfileUpsertSchema
 >;
 
+// ── derived learning profile (adaptive teacher memory) ──────────────────────
+export const learningProfileUpsertSchema = z.object({
+  userId: uuidSchema,
+  signals: z.array(z.record(z.string(), z.unknown())),
+  evidence: z.record(z.string(), z.unknown()),
+  sampleSize: nonNegativeIntSchema,
+  computedAt: isoDateTimeSchema,
+});
+export type LearningProfileUpsertInput = z.infer<
+  typeof learningProfileUpsertSchema
+>;
+
 // ── concept mastery ─────────────────────────────────────────────────────────
 export const conceptMasteryUpsertSchema = z.object({
   userId: uuidSchema,

@@ -16,6 +16,7 @@ function decision(over: Partial<DecisionView> = {}): DecisionView {
     adaptationNarrative: [],
     overrides: [],
     whyThisNext: null,
+    personalizationNote: null,
     ...over,
   };
 }

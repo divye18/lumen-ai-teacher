@@ -64,6 +64,22 @@ export {
   type StrategyOutcome,
 } from "./strategy-memory";
 export {
+  deriveLearningProfile,
+  type LearningProfile,
+  type LearningProfileInput,
+  type LearningSignal,
+  type LearningSignalKind,
+  type SignalEvidence,
+  type ProfileConcept,
+} from "./learning-profile";
+export {
+  personalizeTeaching,
+  BASELINE_ADJUSTMENTS,
+  MIN_SAMPLE_TO_PERSONALIZE,
+  MIN_SIGNAL_CONFIDENCE,
+  type PersonalizationAdjustments,
+} from "./personalization-policy";
+export {
   applyInteractionOutcome,
   type InteractionOutcome,
   type InteractionOutcomeInput,

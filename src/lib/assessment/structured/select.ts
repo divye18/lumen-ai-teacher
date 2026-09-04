@@ -33,6 +33,13 @@ export interface PickStructuredInput {
   struggling: boolean;
   /** Prompts already used this session (avoid repeats). */
   usedPrompts: string[];
+  /**
+   * Adaptive teacher memory: a structured format the learner has been
+   * measurably weaker on. When set, a candidate in that format is preferred
+   * (deterministic, after kind + misconception ranking) so the weak spot gets
+   * deliberate practice rather than being avoided.
+   */
+  preferFormat?: string | null;
   /** Graph structure for the template generator. */
   graph?: {
     prerequisiteTitles: string[];
@@ -97,6 +104,12 @@ export function pickStructuredQuestion(
             Number(hasMisconceptionDistractor(b)) -
             Number(hasMisconceptionDistractor(a));
           if (md !== 0) return md;
+        }
+        if (input.preferFormat) {
+          const fd =
+            Number(b.format === input.preferFormat) -
+            Number(a.format === input.preferFormat);
+          if (fd !== 0) return fd;
         }
         const dd =
           Math.abs(a.difficulty - input.difficulty) -

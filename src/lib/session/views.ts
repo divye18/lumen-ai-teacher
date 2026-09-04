@@ -88,6 +88,13 @@ export interface DecisionView {
    * step, or a bare decision recorded for history).
    */
   whyThisNext: NextStepExplanation | null;
+  /**
+   * Adaptive teacher memory: one learner-facing sentence when a cross-session
+   * learning signal changed how Lumen approached this step
+   * ("Starting with an example because that has helped you recover faster
+   * before."). `null` when no personalization applied.
+   */
+  personalizationNote: string | null;
 }
 
 export interface QuestionView {

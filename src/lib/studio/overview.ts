@@ -16,7 +16,11 @@ import {
   masteryBandLabel,
   scoreToPoints,
 } from "@/lib/teaching/mastery";
-import { buildStrategyMemory } from "@/lib/learner";
+import {
+  buildStrategyMemory,
+  deriveLearningProfile,
+  personalizeTeaching,
+} from "@/lib/learner";
 import { getKnowledgeGraph, type KnowledgeGraphView } from "@/lib/graph";
 
 import { buildMomentum, type MomentumView } from "./momentum";
@@ -92,6 +96,17 @@ export interface StudioOverview {
   graph: KnowledgeGraphView;
   /** Evidence-backed "how Lumen sees your learning" observations. */
   observations: Observation[];
+  /** "What Lumen has learned about how you learn" — adaptive teacher memory. */
+  learnerMemory: LearnerMemoryView | null;
+}
+
+export interface LearnerMemoryView {
+  /** Number of answers the profile was derived from. */
+  computedFrom: number;
+  /** Up to three concise, evidence-backed behavioural signals. */
+  signals: { text: string; evidence: string }[];
+  /** One sentence on how this currently changes Lumen's teaching, if it does. */
+  personalizationNote: string | null;
 }
 
 function jsonNumber(v: unknown): number | null {
@@ -301,6 +316,40 @@ export async function getStudioOverview(
     graph,
   });
 
+  const learningProfile = deriveLearningProfile({
+    answers: recentAnswers,
+    questions: recentQuestions,
+    interactions: recentInteractions,
+    concepts: concepts.map((c) => ({
+      conceptKey: c.conceptKey,
+      title: c.title,
+      masteryPoints: c.masteryPoints,
+      attempts: c.attempts,
+      misconceptionCount: c.misconceptionCount,
+    })),
+    misconceptions: misconRows,
+    strategyMemory,
+  });
+  const topSignals = [...learningProfile.signals]
+    .sort((a, b) => b.evidence.confidence - a.evidence.confidence)
+    .slice(0, 3);
+  const learnerMemory: LearnerMemoryView | null =
+    topSignals.length > 0
+      ? {
+          computedFrom: learningProfile.sampleSize,
+          signals: topSignals.map((s) => ({
+            text: s.summary,
+            evidence:
+              s.evidence.evidenceCount > 0
+                ? `${s.evidence.evidenceCount} observation${
+                    s.evidence.evidenceCount === 1 ? "" : "s"
+                  } · confidence ${Math.round(s.evidence.confidence * 100)}%`
+                : `confidence ${Math.round(s.evidence.confidence * 100)}%`,
+          })),
+          personalizationNote: personalizeTeaching(learningProfile).note,
+        }
+      : null;
+
   const recommendation = buildRecommendation({
     activeSession,
     concepts,
@@ -341,5 +390,6 @@ export async function getStudioOverview(
     llmConfigured: options.llmConfigured,
     graph,
     observations,
+    learnerMemory,
   };
 }

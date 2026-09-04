@@ -231,6 +231,12 @@ export function SessionCompleteView({ report }: { report: SessionReport }) {
             ))}
           </ul>
         ) : null}
+        {report.personalizationInsight ? (
+          <p className="mt-4 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[12px] leading-snug text-[var(--color-accent)]">
+            {report.personalizationInsight} Lumen carries this into your next
+            session.
+          </p>
+        ) : null}
         <ul className="mt-4 flex flex-col gap-2.5">
           {report.insights.map((line, i) => (
             <motion.li
