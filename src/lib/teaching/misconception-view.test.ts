@@ -65,4 +65,9 @@ describe("buildMisconceptionDetail", () => {
       JSON.stringify(buildMisconceptionDetail(s)),
     );
   });
+
+  it("passes IMPROVING through as the real status (ACTIVE | IMPROVING | RESOLVED)", () => {
+    const d = buildMisconceptionDetail(source({ status: "IMPROVING" }));
+    expect(d.status).toBe("IMPROVING");
+  });
 });

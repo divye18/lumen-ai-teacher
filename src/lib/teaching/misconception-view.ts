@@ -15,7 +15,7 @@ export interface MisconceptionDetailView {
   /** How many answers have now shown this misconception. */
   detectionCount: number;
   severity: string;
-  /** ACTIVE | ADDRESSED | RESOLVED. */
+  /** ACTIVE | IMPROVING | RESOLVED. */
   status: string;
   /** True when this misconception existed before the current answer. */
   isRecurrence: boolean;

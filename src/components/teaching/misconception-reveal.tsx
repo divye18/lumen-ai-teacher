@@ -133,12 +133,12 @@ function titleCase(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 }
 
-function statusLabel(status: string): string {
+export function statusLabel(status: string): string {
   switch (status.toUpperCase()) {
     case "RESOLVED":
       return "Resolved";
-    case "ADDRESSED":
-      return "Being addressed";
+    case "IMPROVING":
+      return "Improving";
     default:
       return "Active";
   }
