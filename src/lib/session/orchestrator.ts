@@ -18,6 +18,7 @@ import {
   LessonNotFoundError,
   PersistenceError,
   SessionNotFoundError,
+  ValidationError,
 } from "@/lib/errors";
 import type { Retriever } from "@/lib/rag";
 import { err, ok, type Result } from "@/lib/result";
@@ -35,9 +36,20 @@ import {
   scoreToPoints,
   type ResolvedTeachingDecision,
 } from "@/lib/teaching";
-import { lessonPlanSchema, type LessonPlan } from "@/lib/teaching/contracts";
+import {
+  lessonPlanSchema,
+  type LessonPlan,
+  type RichAnswerEvaluation,
+} from "@/lib/teaching/contracts";
 import { getKnowledgeGraph, graphSignalFromView } from "@/lib/graph";
 import { resolveVisual, visualSignalFromState } from "@/lib/visuals";
+import {
+  pickStructuredQuestion,
+  gradeStructuredAnswer,
+  toClientStructured,
+  structuredQuestionFromRow,
+  structuredAnswerSchema,
+} from "@/lib/assessment/structured";
 
 import {
   buildEngineConcept,
@@ -53,6 +65,7 @@ import {
 } from "./citations";
 import type {
   DecisionView,
+  EvaluationView,
   InteractionResultView,
   SessionProgress,
   SessionView,
@@ -112,6 +125,35 @@ const ACTION_TO_INTERACTION_TYPE: Record<string, InteractionType> = {
 
 const QUESTION_ACTIONS = new Set(["ASK", "ASSESS"]);
 
+/** Prereq / dependent / sibling concept titles for the structured template generator. */
+function buildTemplateGraphContext(
+  graph: SessionContextData["graphView"],
+  conceptKey: string,
+):
+  | {
+      prerequisiteTitles: string[];
+      dependentTitles: string[];
+      otherConceptTitles: string[];
+    }
+  | undefined {
+  if (!graph) return undefined;
+  const node = graph.nodes.find((n) => n.conceptKey === conceptKey);
+  if (!node) return undefined;
+  const titleById = new Map(graph.nodes.map((n) => [n.id, n.title]));
+  const prerequisiteTitles = graph.edges
+    .filter((e) => e.type === "PREREQUISITE" && e.target === node.id)
+    .map((e) => titleById.get(e.source))
+    .filter((t): t is string => Boolean(t));
+  const dependentTitles = graph.edges
+    .filter((e) => e.type === "PREREQUISITE" && e.source === node.id)
+    .map((e) => titleById.get(e.target))
+    .filter((t): t is string => Boolean(t));
+  const otherConceptTitles = graph.nodes
+    .filter((n) => n.id !== node.id)
+    .map((n) => n.title);
+  return { prerequisiteTitles, dependentTitles, otherConceptTitles };
+}
+
 interface LoadedSession {
   data: SessionContextData;
   plan: LessonPlan;
@@ -129,7 +171,12 @@ export function createTeachingOrchestrator(
   const interactions = createInteractionStore(deps.db);
   const engine = createTeachingEngine({ llm: deps.llm });
 
-  /** Snapshot each lesson concept's current mastery (0–100) at session start. */
+  /**
+   * Snapshot each lesson concept's current mastery (0–100). Used at session
+   * start (`__baseline`) and again at completion (`__ending`) so a finished
+   * session's report stays immutable even if the shared per-user concept
+   * mastery moves in a later session.
+   */
   async function captureBaseline(
     lessonId: string,
   ): Promise<Record<string, number> | null> {
@@ -307,15 +354,19 @@ export function createTeachingOrchestrator(
 
     // Graph awareness — best effort. Never blocks the teaching loop.
     let graphSignal: SessionContextData["graphSignal"];
+    let graphView: SessionContextData["graphView"];
     try {
       const graphRes = await getKnowledgeGraph(deps.db, deps.userId, {
         lessonId: lesson.id,
       });
-      if (graphRes.ok && graphRes.value.edges.length > 0) {
-        graphSignal = graphSignalFromView(
-          graphRes.value,
-          currentConcept.concept_key,
-        );
+      if (graphRes.ok) {
+        graphView = graphRes.value;
+        if (graphRes.value.edges.length > 0) {
+          graphSignal = graphSignalFromView(
+            graphRes.value,
+            currentConcept.concept_key,
+          );
+        }
       }
     } catch {
       graphSignal = undefined;
@@ -334,6 +385,7 @@ export function createTeachingOrchestrator(
       sessionInteractions,
       timeElapsedMinutes,
       graphSignal,
+      graphView,
     };
 
     return ok({ data, plan, currentConceptId });
@@ -514,10 +566,31 @@ export function createTeachingOrchestrator(
       if (!loaded.ok) return loaded;
       const { data, plan, currentConceptId } = loaded.value;
 
+      const finishSession = async (): Promise<void> => {
+        if (data.session.status === "COMPLETED") return;
+        const ending = await captureBaseline(data.lesson.id);
+        if (ending) {
+          const snapshot =
+            (data.session.mastery_snapshot as Record<string, unknown> | null) ??
+            {};
+          await sessions.updateTeaching({
+            id: data.session.id,
+            masterySnapshot: { ...snapshot, __ending: ending },
+          });
+        }
+        await sessions.update({
+          id: data.session.id,
+          status: "COMPLETED",
+          endedAt: new Date().toISOString(),
+        });
+        await lessons.update({ id: data.lesson.id, status: "COMPLETED" });
+      };
+
       if (
         data.session.status === "COMPLETED" ||
         data.session.plan_cursor >= data.lessonConcepts.length
       ) {
+        await finishSession();
         return ok(terminalStep(data));
       }
 
@@ -540,8 +613,9 @@ export function createTeachingOrchestrator(
 
       await recordDecision(data, decision, currentConceptId);
 
-      // ── MOVE_FORWARD ───────────────────────────────────────────────
-      if (decision.action === "MOVE_FORWARD") {
+      const advanceConcept = async (
+        decisionView: DecisionView,
+      ): Promise<Result<TeachingStepView>> => {
         await lessons.setConceptStatus(data.currentConcept.id, "COMPLETED");
         const nextCursor = data.session.plan_cursor + 1;
         const nextConcept = data.lessonConcepts.find(
@@ -555,12 +629,7 @@ export function createTeachingOrchestrator(
           currentConceptId: nextConcept?.concept_id ?? null,
         });
         if (done) {
-          await sessions.update({
-            id: data.session.id,
-            status: "COMPLETED",
-            endedAt: new Date().toISOString(),
-          });
-          await lessons.update({ id: data.lesson.id, status: "COMPLETED" });
+          await finishSession();
         } else {
           await lessons.setConceptStatus(nextConcept.id, "TEACHING");
         }
@@ -568,7 +637,7 @@ export function createTeachingOrchestrator(
         const sessionRow = refreshed.ok ? refreshed.value : data.session;
         return ok({
           sessionId: data.session.id,
-          decision: toDecisionView(decision),
+          decision: decisionView,
           content: null,
           question: null,
           citations: [],
@@ -578,6 +647,26 @@ export function createTeachingOrchestrator(
             Math.round(data.timeElapsedMinutes),
           ),
           sessionStatus: done ? "COMPLETED" : "ACTIVE",
+        });
+      };
+
+      // ── MOVE_FORWARD ───────────────────────────────────────────────
+      if (decision.action === "MOVE_FORWARD") {
+        return advanceConcept(toDecisionView(decision));
+      }
+
+      // ── RECAP ──────────────────────────────────────────────────────
+      // A recap is a wind-down, not a teaching step that can repeat. Serve
+      // exactly one recap, then complete the session so the learner reaches
+      // their report instead of looping (e.g. when the time budget is spent).
+      if (decision.action === "RECAP") {
+        if (data.session.current_action === "RECAP") {
+          await finishSession();
+          return ok(terminalStep(data));
+        }
+        await sessions.updateTeaching({
+          id: data.session.id,
+          currentAction: "RECAP",
         });
       }
 
@@ -589,6 +678,137 @@ export function createTeachingOrchestrator(
         const seedKind =
           facts.lastQuestionKind ?? questionKindForMastery(masteryPoints);
         const kind = nextQuestionKind(seedKind, decision.difficultyDirection);
+
+        // Priority: deterministic structured assessment when the LLM is
+        // unavailable and a safe structured question exists; otherwise the
+        // free-form (LLM-evaluated) path; the deterministic free-form template
+        // is the last resort.
+        const structured =
+          deps.llm === null
+            ? pickStructuredQuestion({
+                conceptKey: engineConcept.key,
+                title: engineConcept.title,
+                summary: engineConcept.summary,
+                targetKind: kind,
+                difficulty: engineConcept.difficulty,
+                masteryPoints,
+                struggling:
+                  facts.lastClassification === "INCORRECT" ||
+                  facts.incorrectStreak >= 1,
+                usedPrompts: data.recentQuestions
+                  .filter((q) => q.concept_key === engineConcept.key)
+                  .map((q) => q.prompt),
+                graph: buildTemplateGraphContext(
+                  data.graphView,
+                  engineConcept.key,
+                ),
+              })
+            : null;
+
+        // Deterministic-assessment dead-end guard. With no LLM, free-form
+        // answers can only ever be graded UNCERTAIN — so once the structured
+        // bank + grounded template for this concept are exhausted, don't trap
+        // the learner in ungradeable free-form questions. If they have already
+        // cleared at least one structured check here, advance to the next
+        // concept instead of stalling.
+        if (deps.llm === null && !structured) {
+          const structuredQuestionIdsHere = new Set(
+            data.recentQuestions
+              .filter(
+                (q) =>
+                  q.concept_key === engineConcept.key &&
+                  q.question_format !== "FREE_FORM",
+              )
+              .map((q) => q.id),
+          );
+          const clearedStructuredHere = data.recentAnswers.some(
+            (a) =>
+              a.classification === "CORRECT" &&
+              structuredQuestionIdsHere.has(a.question_id),
+          );
+          if (clearedStructuredHere) {
+            return advanceConcept({
+              ...toDecisionView(decision),
+              action: "MOVE_FORWARD",
+              reason:
+                "You've cleared every structured check I have for this concept — moving on.",
+              adaptationNarrative: [
+                "No deterministic questions left for this concept.",
+                "Advancing — you've already answered the structured checks correctly.",
+              ],
+            });
+          }
+        }
+
+        if (structured) {
+          const sq = structured.question;
+          const questionRow = await qa.createQuestion({
+            sessionId: data.session.id,
+            lessonId: data.lesson.id,
+            userId: deps.userId,
+            conceptKey: engineConcept.key,
+            conceptId: currentConceptId,
+            questionKind: sq.kind,
+            questionFormat: sq.format,
+            difficulty: sq.difficulty,
+            prompt: sq.prompt,
+            answerKey: sq.data,
+            expectedReasoning: null,
+            sourceGrounded: false,
+            citations: [],
+            metadata: {
+              generatorSource: structured.origin,
+              structured: true,
+              ...(sq.context ? { context: sq.context } : {}),
+            },
+          });
+          if (!questionRow.ok) return questionRow;
+
+          await interactions.record({
+            sessionId: data.session.id,
+            userId: deps.userId,
+            conceptId: currentConceptId ?? undefined,
+            role: "TEACHER",
+            interactionType: "QUESTION",
+            content: sq.prompt,
+            metadata: {
+              conceptKey: engineConcept.key,
+              questionId: questionRow.value.id,
+              questionKind: sq.kind,
+              questionFormat: sq.format,
+              action: decision.action,
+            },
+          });
+
+          await lessons.setConceptStatus(data.currentConcept.id, "ASSESSING");
+          await sessions.updateTeaching({
+            id: data.session.id,
+            currentAction: decision.action,
+          });
+
+          return ok({
+            sessionId: data.session.id,
+            decision: toDecisionView(decision),
+            content: null,
+            question: {
+              questionId: questionRow.value.id,
+              kind: sq.kind,
+              difficulty: sq.difficulty,
+              prompt: sq.prompt,
+              conceptKey: engineConcept.key,
+              groundedInSource: false,
+              format: sq.format,
+              structured: toClientStructured(sq, questionRow.value.id),
+            },
+            citations: [],
+            progress: progressOf(
+              data.session,
+              data.lessonConcepts,
+              Math.round(data.timeElapsedMinutes),
+            ),
+            sessionStatus: "ACTIVE",
+          });
+        }
 
         const generated = await generateQuestion({
           llm: deps.llm,
@@ -613,6 +833,7 @@ export function createTeachingOrchestrator(
           conceptKey: engineConcept.key,
           conceptId: currentConceptId,
           questionKind: q.kind,
+          questionFormat: "FREE_FORM",
           difficulty: q.difficulty,
           prompt: q.prompt,
           expectedReasoning: q.expectedReasoning,
@@ -654,6 +875,8 @@ export function createTeachingOrchestrator(
             prompt: q.prompt,
             conceptKey: engineConcept.key,
             groundedInSource: q.groundedInSource,
+            format: "FREE_FORM",
+            structured: null,
           },
           citations: src?.citations ?? [],
           progress: progressOf(
@@ -798,46 +1021,65 @@ export function createTeachingOrchestrator(
         currentConcept: concept,
       });
 
-      const evaluated = await evaluateAnswer({
-        llm: deps.llm,
-        question: {
-          prompt: question.prompt,
-          expectedReasoning: question.expected_reasoning,
-          kind: question.question_kind,
-          difficulty: question.difficulty,
-        },
-        answerText: input.answerText,
-        concept: { key: concept.concept_key, title: concept.title },
-        language: data.session.language,
-        sourceContext: src?.text ?? null,
-      });
-      if (!evaluated.ok) return evaluated;
-      const evaluation = evaluated.value;
+      // Structured questions are graded by pure deterministic code; free-form
+      // questions go to the LLM evaluator (or its conservative fallback).
+      let evaluation: RichAnswerEvaluation & {
+        source: "ai" | "structured" | "fallback";
+        misconceptionInsight?: { label: string; explanation: string } | null;
+        breakdown?: EvaluationView["breakdown"];
+      };
 
-      await qa.recordAnswer({
-        questionId: question.id,
-        sessionId: data.session.id,
-        userId: deps.userId,
-        responseText: input.answerText,
-        classification: evaluation.classification,
-        correctnessScore: evaluation.correctnessScore,
-        evaluation,
-        responseTimeMs: input.responseTimeMs ?? null,
-      });
-
-      await interactions.record({
-        sessionId: data.session.id,
-        userId: deps.userId,
-        conceptId,
-        role: "TEACHER",
-        interactionType: "FEEDBACK",
-        content: evaluation.feedback,
-        metadata: {
-          conceptKey: concept.concept_key,
-          classification: evaluation.classification,
-          correctnessScore: evaluation.correctnessScore,
-        },
-      });
+      if (question.question_format !== "FREE_FORM") {
+        const structuredQ = structuredQuestionFromRow(question);
+        if (!structuredQ) {
+          return err(
+            new PersistenceError("stored structured question is not valid", {
+              cause: question.id,
+            }),
+          );
+        }
+        let parsedAnswer: unknown;
+        try {
+          parsedAnswer = JSON.parse(input.answerText);
+        } catch {
+          return err(new ValidationError("structured answer is not JSON", []));
+        }
+        const answer = structuredAnswerSchema.safeParse(parsedAnswer);
+        if (!answer.success) {
+          return err(
+            new ValidationError(
+              "structured answer failed validation",
+              answer.error.issues,
+            ),
+          );
+        }
+        const graded = gradeStructuredAnswer(structuredQ, answer.data);
+        evaluation = {
+          ...graded,
+          misconceptionInsight: graded.misconceptionInsight,
+          breakdown: graded.breakdown,
+        };
+      } else {
+        const evaluated = await evaluateAnswer({
+          llm: deps.llm,
+          question: {
+            prompt: question.prompt,
+            expectedReasoning: question.expected_reasoning,
+            kind: question.question_kind,
+            difficulty: question.difficulty,
+          },
+          answerText: input.answerText,
+          concept: { key: concept.concept_key, title: concept.title },
+          language: data.session.language,
+          sourceContext: src?.text ?? null,
+        });
+        if (!evaluated.ok) return evaluated;
+        evaluation = {
+          ...evaluated.value,
+          misconceptionInsight: null,
+          breakdown: null,
+        };
+      }
 
       const existingForConcept = data.misconceptions.filter(
         (m) => m.status !== "RESOLVED",
@@ -871,6 +1113,45 @@ export function createTeachingOrchestrator(
         questionDifficulty: question.difficulty,
         strategyUsed,
         existingMisconceptions: existing,
+      });
+
+      // Persist the answer WITH the resulting mastery delta embedded, so the
+      // mastery trajectory reads real evidence directly (no replay needed).
+      await qa.recordAnswer({
+        questionId: question.id,
+        sessionId: data.session.id,
+        userId: deps.userId,
+        responseText: input.answerText,
+        classification: evaluation.classification,
+        correctnessScore: evaluation.correctnessScore,
+        evaluation: {
+          ...evaluation,
+          masteryDelta: {
+            before: outcome.delta.masteryBefore,
+            after: outcome.delta.masteryAfter,
+            delta: outcome.delta.masteryAfter - outcome.delta.masteryBefore,
+            reason: outcome.delta.reason,
+          },
+          questionFormat: question.question_format,
+          questionDifficulty: question.difficulty,
+        },
+        responseTimeMs: input.responseTimeMs ?? null,
+      });
+
+      await interactions.record({
+        sessionId: data.session.id,
+        userId: deps.userId,
+        conceptId,
+        role: "TEACHER",
+        interactionType: "FEEDBACK",
+        content: evaluation.feedback,
+        metadata: {
+          conceptKey: concept.concept_key,
+          classification: evaluation.classification,
+          correctnessScore: evaluation.correctnessScore,
+          masteryBefore: outcome.delta.masteryBefore,
+          masteryAfter: outcome.delta.masteryAfter,
+        },
       });
 
       const masteryWrite = await mastery.upsert({
@@ -969,6 +1250,9 @@ export function createTeachingOrchestrator(
           reasoningQuality: evaluation.reasoningQuality,
           missingConcepts: evaluation.missingConcepts,
           feedback: evaluation.feedback,
+          source: evaluation.source,
+          misconceptionInsight: evaluation.misconceptionInsight ?? null,
+          breakdown: evaluation.breakdown ?? null,
         },
         learnerUpdate: {
           conceptKey: concept.concept_key,

@@ -8,6 +8,7 @@ import { LinkButton } from "@/components/ui/button";
 import { MasteryMeter } from "@/components/ui/mastery-meter";
 import { LumenMark } from "@/components/ui/lumen-mark";
 import { KnowledgeGraphPanel } from "@/components/graph/knowledge-graph-panel";
+import { MasteryTrajectoryChart } from "@/components/learning/mastery-trajectory";
 import type { SessionReport } from "@/lib/studio/session-report";
 import { cn } from "@/lib/ui/cn";
 
@@ -108,6 +109,27 @@ export function SessionCompleteView({ report }: { report: SessionReport }) {
               </li>
             ))}
           </ul>
+        </Panel>
+      ) : null}
+
+      {report.trajectories.length > 0 ? (
+        <Panel inset>
+          <p className="text-[11px] font-medium tracking-wide text-[var(--color-ink-faint)] uppercase">
+            How your understanding moved
+          </p>
+          <p className="mt-1 text-[12px] text-[var(--color-ink-muted)]">
+            Every point is a real answer. Tap one to see why the number changed.
+          </p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            {report.trajectories.map((t) => (
+              <div key={t.conceptKey}>
+                <p className="mb-1.5 text-[12px] font-medium text-[var(--color-ink)]">
+                  {t.conceptTitle}
+                </p>
+                <MasteryTrajectoryChart trajectory={t} />
+              </div>
+            ))}
+          </div>
         </Panel>
       ) : null}
 

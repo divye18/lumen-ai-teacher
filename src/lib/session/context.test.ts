@@ -129,6 +129,7 @@ function question(minutesAgo: number): ClientTeachingQuestion {
     concept_key: "page-faults",
     concept_id: CONCEPT_ID,
     question_kind: "APPLICATION",
+    question_format: "FREE_FORM",
     difficulty: 3,
     prompt: "apply it",
     source_grounded: false,

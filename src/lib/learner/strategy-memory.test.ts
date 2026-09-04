@@ -38,6 +38,7 @@ function question(min: number, conceptKey = "pf"): ClientTeachingQuestion {
     concept_key: conceptKey,
     concept_id: "c1",
     question_kind: "APPLICATION",
+    question_format: "FREE_FORM",
     difficulty: 3,
     prompt: "…",
     source_grounded: false,

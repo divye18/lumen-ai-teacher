@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 
 import { SourceCitations } from "@/components/teaching/source-citations";
+import { StructuredQuestion } from "@/components/teaching/structured/structured-question";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import type { QuestionView } from "@/lib/session/views";
@@ -25,6 +26,52 @@ export function QuestionPanel({
   /** A completed spoken answer — drops into the field for review, never auto-sent. */
   voiceTranscript?: string | null;
   /** Voice controls rendered above the textarea, when voice is on. */
+  voiceSlot?: React.ReactNode;
+}) {
+  if (question.format !== "FREE_FORM" && question.structured) {
+    return (
+      <div>
+        {question.groundedInSource && citations.length > 0 ? (
+          <div className="mb-4">
+            <SourceCitations citations={citations} compact />
+          </div>
+        ) : null}
+        <StructuredQuestion
+          question={question.structured}
+          submitting={submitting}
+          onSubmit={(structuredAnswer, elapsedMs) =>
+            onSubmit(JSON.stringify(structuredAnswer), elapsedMs)
+          }
+        />
+      </div>
+    );
+  }
+
+  return (
+    <FreeFormQuestion
+      question={question}
+      citations={citations}
+      onSubmit={onSubmit}
+      submitting={submitting}
+      voiceTranscript={voiceTranscript}
+      voiceSlot={voiceSlot}
+    />
+  );
+}
+
+function FreeFormQuestion({
+  question,
+  citations,
+  onSubmit,
+  submitting,
+  voiceTranscript,
+  voiceSlot,
+}: {
+  question: QuestionView;
+  citations: TeachingCitation[];
+  onSubmit: (answer: string, elapsedMs: number) => void;
+  submitting: boolean;
+  voiceTranscript?: string | null;
   voiceSlot?: React.ReactNode;
 }) {
   const reduce = useReducedMotion();

@@ -70,6 +70,39 @@ export function EvaluationResult({
           {evaluation.feedback}
         </p>
 
+        {evaluation.breakdown?.items &&
+        evaluation.breakdown.items.length > 0 ? (
+          <ul className="mt-3 space-y-1">
+            {evaluation.breakdown.items.map((item) => (
+              <li
+                key={item.id}
+                className="flex items-start gap-2 text-[12px] leading-snug"
+              >
+                <span
+                  className={cn(
+                    "mt-0.5 shrink-0 font-semibold",
+                    item.correct
+                      ? "text-[var(--color-positive)]"
+                      : "text-[var(--color-warning)]",
+                  )}
+                  aria-hidden
+                >
+                  {item.correct ? "✓" : "✗"}
+                </span>
+                <span className="text-[var(--color-ink-muted)]">
+                  {item.text}
+                  {!item.correct && item.expected ? (
+                    <span className="text-[var(--color-ink-faint)]">
+                      {" "}
+                      — {item.expected}
+                    </span>
+                  ) : null}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+
         {evaluation.missingConcepts.length > 0 ? (
           <div className="mt-3 flex flex-wrap gap-1.5">
             {evaluation.missingConcepts.map((m) => (
@@ -83,6 +116,17 @@ export function EvaluationResult({
           </div>
         ) : null}
       </div>
+
+      {evaluation.misconceptionInsight ? (
+        <div className="mt-3 rounded-[var(--radius-md)] border border-[color-mix(in_oklab,var(--color-warning)_30%,transparent)] bg-[color-mix(in_oklab,var(--color-warning)_7%,transparent)] p-3.5">
+          <p className="text-[10px] font-semibold tracking-wider text-[var(--color-warning)] uppercase">
+            Lumen noticed a pattern
+          </p>
+          <p className="mt-1.5 text-[13px] leading-relaxed text-[var(--color-ink)]">
+            {evaluation.misconceptionInsight.explanation}
+          </p>
+        </div>
+      ) : null}
 
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
         <div className="rounded-[var(--radius-md)] border border-[var(--color-border)] p-4">

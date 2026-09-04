@@ -14,15 +14,19 @@ import { listResult, parseInput, rowResult, type DbClient } from "./shared";
 export type TeachingQuestionRow = Tables<"teaching_questions">;
 export type TeachingAnswerRow = Tables<"teaching_answers">;
 
-/** Question fields safe for client components — omits `expected_reasoning`. */
+/**
+ * Question fields safe for client components — omits the grading key
+ * (`expected_reasoning` rubric + structured `answer_key`).
+ */
 export type ClientTeachingQuestion = Omit<
   TeachingQuestionRow,
-  "expected_reasoning"
+  "expected_reasoning" | "answer_key"
 >;
 
 function toClientQuestion(row: TeachingQuestionRow): ClientTeachingQuestion {
-  const { expected_reasoning: _omit, ...safe } = row;
-  void _omit;
+  const { expected_reasoning: _r, answer_key: _k, ...safe } = row;
+  void _r;
+  void _k;
   return safe;
 }
 
@@ -66,9 +70,11 @@ export function createTeachingQaStore(db: DbClient): TeachingQaStore {
         concept_key: v.conceptKey,
         concept_id: v.conceptId ?? null,
         question_kind: v.questionKind,
+        question_format: v.questionFormat ?? "FREE_FORM",
         difficulty: v.difficulty,
         prompt: v.prompt,
         expected_reasoning: v.expectedReasoning ?? null,
+        answer_key: (v.answerKey ?? {}) as Json,
         source_grounded: v.sourceGrounded,
         citations: v.citations as Json,
         metadata: (v.metadata ?? {}) as Json,

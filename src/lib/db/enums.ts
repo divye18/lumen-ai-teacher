@@ -172,6 +172,30 @@ export const QUESTION_KINDS = [
 export type QuestionKind = (typeof QUESTION_KINDS)[number];
 export const questionKindSchema = z.enum(QUESTION_KINDS);
 
+/**
+ * Phase 5 — the input/grading shape of a question. `question_kind` still drives
+ * the difficulty ladder; this is orthogonal. `FREE_FORM` = the LLM-evaluated
+ * path; the rest are graded by pure deterministic code on the server.
+ */
+export const QUESTION_FORMATS = [
+  "FREE_FORM",
+  "MCQ",
+  "MULTI_SELECT",
+  "TRUE_FALSE",
+  "ORDER_STEPS",
+  "CLASSIFY",
+  "MATCH_RELATIONSHIP",
+] as const;
+export type QuestionFormat = (typeof QUESTION_FORMATS)[number];
+export const questionFormatSchema = z.enum(QUESTION_FORMATS);
+
+/** Structured formats only (everything except FREE_FORM). */
+export const STRUCTURED_QUESTION_FORMATS = QUESTION_FORMATS.filter(
+  (f): f is Exclude<QuestionFormat, "FREE_FORM"> => f !== "FREE_FORM",
+);
+export type StructuredQuestionFormat =
+  (typeof STRUCTURED_QUESTION_FORMATS)[number];
+
 export const ANSWER_CLASSIFICATIONS = [
   "CORRECT",
   "PARTIALLY_CORRECT",

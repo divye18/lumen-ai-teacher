@@ -124,7 +124,10 @@ export function baselineDecision(facts: PolicyFacts): ResolvedTeachingDecision {
     facts.timeRemainingMinutes !== null &&
     facts.timeRemainingMinutes <= LOW_TIME_MINUTES;
 
-  if (facts.repeatedMisconception) {
+  if (facts.repeatedMisconception && facts.explanationsSinceQuestion === 0) {
+    // Re-teach ONCE to address the recurring misconception, then (via the
+    // `explanationsSinceQuestion >= 1` branch below) re-check — never re-teach
+    // into a void turn after turn.
     action = "RETEACH";
     strategy = nextStrategy(facts.currentStrategy, facts.triedStrategies);
     difficultyDirection = "EASIER";
@@ -306,8 +309,14 @@ export function reconcileDecision(
   let difficultyDirection = proposal.difficultyDirection;
   let nextAction: TeachingAction | null = proposal.nextAction ?? null;
 
-  // 1. Repeated misconception ALWAYS forces a reteach with a fresh strategy.
-  if (facts.repeatedMisconception && action !== "RETEACH") {
+  // 1. Repeated misconception forces a reteach with a fresh strategy — but only
+  //    once per question. If we already retaught since the last check, let the
+  //    proposal stand (rule 6 will re-ask) so we never reteach turn after turn.
+  if (
+    facts.repeatedMisconception &&
+    action !== "RETEACH" &&
+    facts.explanationsSinceQuestion === 0
+  ) {
     overrides.push(
       `AI proposed ${action}, but a misconception is recurring — forced RETEACH.`,
     );

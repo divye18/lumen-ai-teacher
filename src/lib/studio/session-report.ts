@@ -18,6 +18,10 @@ import { SessionNotFoundError } from "@/lib/errors";
 import { err, ok, type Result } from "@/lib/result";
 
 import { buildObservations, type Observation } from "./observations";
+import {
+  buildMasteryTrajectory,
+  type MasteryTrajectory,
+} from "./mastery-trajectory";
 import { buildRecommendation, type RecommendationView } from "./recommendation";
 
 export interface ConceptOutcome {
@@ -62,6 +66,8 @@ export interface SessionReport {
   } | null;
   /** The lesson's knowledge graph with current learner state. */
   graph: KnowledgeGraphView;
+  /** Real per-concept mastery trajectories from this session's answers. */
+  trajectories: MasteryTrajectory[];
 }
 
 function jsonNum(v: unknown): number | null {
@@ -106,6 +112,9 @@ export async function getSessionReport(
   const snapshot =
     (session.mastery_snapshot as Record<string, unknown> | null) ?? {};
   const baseline = (snapshot.__baseline as Record<string, number> | null) ?? {};
+  // A completed session snapshots ending mastery so its report stays immutable
+  // even after the shared per-user concept mastery moves in a later session.
+  const ending = (snapshot.__ending as Record<string, number> | null) ?? null;
 
   const answeredConceptKeys = new Set(
     questions
@@ -119,7 +128,8 @@ export async function getSessionReport(
     )
     .map((c) => {
       const m = c.concept_id ? masteryByConceptId.get(c.concept_id) : undefined;
-      const after = m ? scoreToPoints(m.mastery_score) : 0;
+      const liveAfter = m ? scoreToPoints(m.mastery_score) : 0;
+      const after = (ending && jsonNum(ending[c.concept_key])) ?? liveAfter;
       const before = jsonNum(baseline[c.concept_key]) ?? 0;
       return {
         key: c.concept_key,
@@ -312,6 +322,16 @@ export async function getSessionReport(
     learningPattern,
     nextBestMove,
     graph,
+    trajectories: outcomes
+      .map((o) =>
+        buildMasteryTrajectory({
+          conceptKey: o.key,
+          conceptTitle: o.title,
+          answers,
+          questions,
+        }),
+      )
+      .filter((t) => t.points.length > 0),
   });
 }
 

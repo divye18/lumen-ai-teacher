@@ -440,6 +440,9 @@ export interface Database {
           citations: Json;
           metadata: Json;
           created_at: Timestamptz;
+          // Phase 5 — structured assessment
+          question_format: string;
+          answer_key: Json;
         };
         Insert: {
           id?: Uuid;
@@ -456,6 +459,8 @@ export interface Database {
           citations?: Json;
           metadata?: Json;
           created_at?: Timestamptz;
+          question_format?: string;
+          answer_key?: Json;
         };
         Update: {
           id?: Uuid;
@@ -472,6 +477,8 @@ export interface Database {
           citations?: Json;
           metadata?: Json;
           created_at?: Timestamptz;
+          question_format?: string;
+          answer_key?: Json;
         };
         Relationships: [];
       };

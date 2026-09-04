@@ -151,20 +151,43 @@ export async function ensureDemoSession(
     created = true;
   }
 
-  // 2. Reuse an in-progress session for the demo lesson, else make one.
+  // 2. Resume a fresh, un-started demo session; otherwise start a new one so
+  //    every "Start the demo" gives a clean run.
   const existingSessions = await sessions.listForUser(userId, { limit: 40 });
+  const FRESH_MS = 40 * 60_000;
   const liveSession = existingSessions.ok
-    ? existingSessions.value.find(
-        (s) =>
-          s.lesson_id === lessonId &&
-          (s.status === "ACTIVE" ||
-            s.status === "PAUSED" ||
-            s.status === "PLANNED"),
-      )
+    ? existingSessions.value.find((s) => {
+        if (s.lesson_id !== lessonId) return false;
+        if (
+          s.status !== "ACTIVE" &&
+          s.status !== "PAUSED" &&
+          s.status !== "PLANNED"
+        ) {
+          return false;
+        }
+        // Not yet worked through any concept, and created recently.
+        if (s.plan_cursor > 0) return false;
+        const bornAt = new Date(s.started_at ?? s.created_at).getTime();
+        return Date.now() - bornAt < FRESH_MS;
+      })
     : undefined;
 
   if (liveSession) {
     return ok({ sessionId: liveSession.id, lessonId, created });
+  }
+
+  // Retire any stale demo sessions so the dashboard stays clean.
+  if (existingSessions.ok) {
+    for (const s of existingSessions.value) {
+      if (
+        s.lesson_id === lessonId &&
+        (s.status === "ACTIVE" ||
+          s.status === "PAUSED" ||
+          s.status === "PLANNED")
+      ) {
+        await sessions.updateTeaching({ id: s.id, status: "ABANDONED" });
+      }
+    }
   }
 
   const sessionRes = await sessions.create({

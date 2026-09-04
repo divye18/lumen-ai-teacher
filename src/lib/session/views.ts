@@ -1,5 +1,7 @@
 import type { TeachingCitation } from "./citations";
 import type { VisualDirective } from "@/types/visuals";
+import type { ClientStructuredQuestion } from "@/lib/assessment/structured";
+import type { QuestionFormat } from "@/lib/db/enums";
 import type {
   DifficultyDirection,
   QuestionKind,
@@ -86,6 +88,13 @@ export interface QuestionView {
   prompt: string;
   conceptKey: string;
   groundedInSource: boolean;
+  /** FREE_FORM = a text answer; otherwise a structured interaction. */
+  format: QuestionFormat;
+  /**
+   * The client-safe structured question (options / items / buckets, no answer
+   * key). Present iff `format !== "FREE_FORM"`.
+   */
+  structured: ClientStructuredQuestion | null;
 }
 
 export interface TeachingContentView {
@@ -120,6 +129,19 @@ export interface EvaluationView {
   reasoningQuality: string;
   missingConcepts: string[];
   feedback: string;
+  /** How the answer was graded. */
+  source: "ai" | "structured" | "fallback";
+  /**
+   * Learner-facing misconception surfaced by this answer (never the internal
+   * taxonomy id). `null` when none / the answer was correct.
+   */
+  misconceptionInsight: { label: string; explanation: string } | null;
+  /** Per-item breakdown for a structured answer (for the result UI). */
+  breakdown: {
+    summary: string;
+    items?: { id: string; text: string; correct: boolean; expected?: string }[];
+    correctAnswerText?: string;
+  } | null;
 }
 
 export interface LearnerUpdateView {

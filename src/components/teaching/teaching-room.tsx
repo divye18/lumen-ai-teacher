@@ -28,6 +28,12 @@ import { apiFetch } from "@/lib/ui/api-client";
 import { actionLabel } from "@/lib/ui/learning-presentation";
 import { buildSessionEvents } from "@/lib/ui/session-events";
 import { presenceForContext } from "@/lib/teacher/presence";
+import { masteryBand } from "@/lib/teaching/mastery";
+import {
+  trajectoryFromResults,
+  type MasteryTrajectory,
+} from "@/lib/studio/mastery-trajectory";
+import { MasteryTrajectoryChart } from "@/components/learning/mastery-trajectory";
 import type {
   InteractionResultView,
   SessionView,
@@ -62,6 +68,22 @@ export interface VoiceCloudStatus {
   tts: string | null;
 }
 
+interface AnswerLogEntry {
+  conceptKey: string;
+  masteryBefore: number;
+  masteryAfter: number;
+  reason: string;
+  classification: string;
+  misconceptionDetected: boolean;
+  format: string;
+  difficulty: number;
+  at: string;
+}
+
+function bandIdFor(points: number): string {
+  return masteryBand(points);
+}
+
 export function TeachingRoom({
   sessionId,
   initialSession,
@@ -90,6 +112,10 @@ export function TeachingRoom({
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [voiceAnswer, setVoiceAnswer] = useState<string | null>(null);
   const [elapsedSec, setElapsedSec] = useState(0);
+  const [answerLog, setAnswerLog] = useState<AnswerLogEntry[]>([]);
+  const [graphState, setGraphState] = useState<KnowledgeGraphView | null>(
+    graph,
+  );
 
   const [statusByKey, setStatusByKey] = useState<Record<string, string>>(() =>
     Object.fromEntries(initialConcepts.map((c) => [c.key, c.status])),
@@ -249,12 +275,45 @@ export function TeachingRoom({
       setErrorMsg(res.error.message);
       return;
     }
-    setResult(res.data.result);
-    setResults((r) => [...r, res.data.result]);
-    setDecisionHistory((h) => [...h, res.data.result.nextDecision]);
+    const r = res.data.result;
+    setResult(r);
+    setResults((prev) => [...prev, r]);
+    setDecisionHistory((h) => [...h, r.nextDecision]);
+    setAnswerLog((prev) => [
+      ...prev,
+      {
+        conceptKey: r.learnerUpdate.conceptKey,
+        masteryBefore: r.learnerUpdate.masteryBefore,
+        masteryAfter: r.learnerUpdate.masteryAfter,
+        reason: r.learnerUpdate.reason,
+        classification: r.evaluation.classification,
+        misconceptionDetected: r.learnerUpdate.newMisconceptions > 0,
+        format: step?.question?.format ?? "FREE_FORM",
+        difficulty: step?.question?.difficulty ?? 3,
+        at: new Date().toISOString(),
+      },
+    ]);
+    // Reflect the new mastery in the client graph so the map re-colours live.
+    setGraphState((g) => {
+      if (!g) return g;
+      return {
+        ...g,
+        nodes: g.nodes.map((n) =>
+          n.conceptKey === r.learnerUpdate.conceptKey
+            ? {
+                ...n,
+                masteryPoints: r.learnerUpdate.masteryAfter,
+                masteryBand: r.learnerUpdate.masteryBand,
+                bandId: bandIdFor(r.learnerUpdate.masteryAfter),
+                assessed: true,
+              }
+            : n,
+        ),
+      };
+    });
     await refreshSession();
     setPhase("result");
-    if (voiceEnabled) voice.speak(res.data.result.evaluation.feedback);
+    if (voiceEnabled) voice.speak(r.evaluation.feedback);
   }
 
   function beginTransition() {
@@ -275,6 +334,17 @@ export function TeachingRoom({
   const activeDecision = result
     ? result.nextDecision
     : (step?.decision ?? null);
+
+  const resultConceptKey = result?.learnerUpdate.conceptKey ?? null;
+  const currentTrajectory: MasteryTrajectory | null = resultConceptKey
+    ? trajectoryFromResults({
+        conceptKey: resultConceptKey,
+        conceptTitle:
+          initialConcepts.find((c) => c.key === resultConceptKey)?.title ??
+          resultConceptKey,
+        entries: answerLog,
+      })
+    : null;
 
   const concepts: TimelineConcept[] = initialConcepts.map((c) => ({
     ...c,
@@ -463,6 +533,11 @@ export function TeachingRoom({
                     onContinue={beginTransition}
                     continuing={busy}
                   />
+                  {currentTrajectory && currentTrajectory.points.length >= 2 ? (
+                    <div className="mt-5">
+                      <MasteryTrajectoryChart trajectory={currentTrajectory} />
+                    </div>
+                  ) : null}
                 </>
               ) : null}
 
@@ -518,7 +593,7 @@ export function TeachingRoom({
             concepts={concepts}
             currentIndex={currentIndex}
             approachTrail={approachTrail}
-            graph={graph}
+            graph={graphState}
             currentConceptKey={currentConceptKey}
           />
           <SessionTimelinePanel events={events} />

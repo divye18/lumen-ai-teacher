@@ -117,6 +117,17 @@ describe("baselineDecision (deterministic policy)", () => {
     expect(d.adaptationNarrative.join(" ")).toMatch(/strateg/i);
   });
 
+  it("repeated misconception but already retaught this turn → re-check, don't reteach again", () => {
+    const d = baselineDecision(
+      facts({
+        repeatedMisconception: true,
+        explanationsSinceQuestion: 1,
+        masteryPoints: 20,
+      }),
+    );
+    expect(d.action).toBe("ASK");
+  });
+
   it("low time + adequate mastery → prioritise moving forward", () => {
     const d = baselineDecision(
       facts({ timeRemainingMinutes: 3, masteryPoints: 60 }),

@@ -16,7 +16,7 @@ import {
 } from "@/lib/db/enums";
 import type { PolicyFacts } from "@/lib/teaching/policy";
 import { scoreToPoints } from "@/lib/teaching/mastery";
-import type { GraphTeachingSignal } from "@/lib/graph";
+import type { GraphTeachingSignal, KnowledgeGraphView } from "@/lib/graph";
 import type {
   EngineConceptContext,
   EngineSignalContext,
@@ -43,6 +43,8 @@ export interface SessionContextData {
    * ignores prerequisite awareness.
    */
   graphSignal?: GraphTeachingSignal;
+  /** The full lesson knowledge graph, when available (structured-question distractors). */
+  graphView?: KnowledgeGraphView;
 }
 
 function asStrategy(value: string | null | undefined): TeachingStyle | null {

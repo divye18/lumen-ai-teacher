@@ -24,6 +24,7 @@ function q(id: string, kind: string): ClientTeachingQuestion {
     concept_key: "k",
     concept_id: "c",
     question_kind: kind,
+    question_format: "FREE_FORM",
     difficulty: 3,
     prompt: "…",
     source_grounded: false,
