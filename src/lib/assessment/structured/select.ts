@@ -1,4 +1,5 @@
 import type { QuestionKind } from "@/lib/db/enums";
+import { misconceptionCategoriesInQuestion } from "@/lib/learner/misconception-resolution";
 
 import { ASSESSMENT_BANK } from "./bank";
 import type { StructuredQuestion } from "./contracts";
@@ -40,6 +41,17 @@ export interface PickStructuredInput {
    * deliberate practice rather than being avoided.
    */
   preferFormat?: string | null;
+  /**
+   * 9.2 targeted verification: the normalized category of an unresolved
+   * (ACTIVE/IMPROVING) misconception the learner has already received
+   * remediation for. When set, a bank candidate that tests this exact
+   * misconception (via a distractor mapped to it) outranks ordinary
+   * kind/format/difficulty-only ranking — deliberately verifying whether the
+   * misconception is actually gone rather than just asking another question.
+   * Never forces a bad-fit question: when no candidate tests it, ranking
+   * falls through unchanged to the ordinary criteria below.
+   */
+  verifyMisconceptionCategory?: string | null;
   /** Graph structure for the template generator. */
   graph?: {
     prerequisiteTitles: string[];
@@ -73,6 +85,72 @@ function hasMisconceptionDistractor(q: StructuredQuestion): boolean {
   }
 }
 
+/** Whether a candidate's distractor(s) test exactly this misconception category. */
+function targetsVerificationCategory(
+  q: StructuredQuestion,
+  category: string,
+): boolean {
+  return misconceptionCategoriesInQuestion(q).includes(category);
+}
+
+export interface RankStructuredCandidatesInput {
+  targetKind: QuestionKind;
+  difficulty: number;
+  /** True when the learner just answered incorrectly / is struggling. */
+  wantMisconception: boolean;
+  preferFormat?: string | null;
+  /** See `PickStructuredInput.verifyMisconceptionCategory`. */
+  verifyMisconceptionCategory?: string | null;
+}
+
+/**
+ * Pure ranking of already-filtered structured question candidates. Extracted
+ * from `pickStructuredQuestion` so both the bank-lookup path and tests can
+ * exercise it directly, independent of what happens to be authored in the
+ * bank right now.
+ *
+ * Priority: (1) verification targeting — a candidate that tests the tracked
+ * misconception outranks everything else, when requested; (2) matching
+ * question kind; (3) a general misconception-targeting question when the
+ * learner is struggling; (4) the learner's format weak spot; (5) closest
+ * difficulty; (6) a stable tiebreak on the prompt.
+ */
+export function rankStructuredCandidates(
+  candidates: StructuredQuestion[],
+  opts: RankStructuredCandidatesInput,
+): StructuredQuestion[] {
+  const verifyCategory = opts.verifyMisconceptionCategory ?? null;
+  return [...candidates].sort((a, b) => {
+    if (verifyCategory) {
+      const vd =
+        Number(targetsVerificationCategory(b, verifyCategory)) -
+        Number(targetsVerificationCategory(a, verifyCategory));
+      if (vd !== 0) return vd;
+    }
+    const kd =
+      kindDistance(a.kind, opts.targetKind) -
+      kindDistance(b.kind, opts.targetKind);
+    if (kd !== 0) return kd;
+    if (opts.wantMisconception) {
+      const md =
+        Number(hasMisconceptionDistractor(b)) -
+        Number(hasMisconceptionDistractor(a));
+      if (md !== 0) return md;
+    }
+    if (opts.preferFormat) {
+      const fd =
+        Number(b.format === opts.preferFormat) -
+        Number(a.format === opts.preferFormat);
+      if (fd !== 0) return fd;
+    }
+    const dd =
+      Math.abs(a.difficulty - opts.difficulty) -
+      Math.abs(b.difficulty - opts.difficulty);
+    if (dd !== 0) return dd;
+    return a.prompt < b.prompt ? -1 : 1;
+  });
+}
+
 export function pickStructuredQuestion(
   input: PickStructuredInput,
 ): PickedStructuredQuestion | null {
@@ -90,32 +168,13 @@ export function pickStructuredQuestion(
       .filter((q) => structuredQuestionSchema.safeParse(q).success);
 
     if (candidates.length > 0) {
-      // Rank: prefer matching kind, then a misconception-targeting question
-      // when the learner is struggling / low mastery, then closest difficulty,
-      // then a stable tiebreak on the prompt.
       const wantMisconception = input.struggling || input.masteryPoints < 55;
-      const ranked = [...candidates].sort((a, b) => {
-        const kd =
-          kindDistance(a.kind, input.targetKind) -
-          kindDistance(b.kind, input.targetKind);
-        if (kd !== 0) return kd;
-        if (wantMisconception) {
-          const md =
-            Number(hasMisconceptionDistractor(b)) -
-            Number(hasMisconceptionDistractor(a));
-          if (md !== 0) return md;
-        }
-        if (input.preferFormat) {
-          const fd =
-            Number(b.format === input.preferFormat) -
-            Number(a.format === input.preferFormat);
-          if (fd !== 0) return fd;
-        }
-        const dd =
-          Math.abs(a.difficulty - input.difficulty) -
-          Math.abs(b.difficulty - input.difficulty);
-        if (dd !== 0) return dd;
-        return a.prompt < b.prompt ? -1 : 1;
+      const ranked = rankStructuredCandidates(candidates, {
+        targetKind: input.targetKind,
+        difficulty: input.difficulty,
+        wantMisconception,
+        preferFormat: input.preferFormat,
+        verifyMisconceptionCategory: input.verifyMisconceptionCategory,
       });
       return { question: ranked[0], origin: "bank" };
     }

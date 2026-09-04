@@ -160,6 +160,71 @@ export function planMisconceptionResolution(input: {
   return null;
 }
 
+// ── verification targeting (9.2) ────────────────────────────────────────
+//
+// Deliberately choosing WHICH unresolved misconception a verification
+// question should test. Purely a selection decision — it never touches
+// status. The status transition itself still only ever happens through
+// `planMisconceptionResolution` above, driven by the learner's answer to
+// whatever question this points at.
+
+export interface VerificationCandidate {
+  id: string;
+  category: string;
+  status: ResolvableStatus;
+  severity?: string | null;
+}
+
+const VERIFICATION_STATUS_PRIORITY: Record<string, number> = {
+  IMPROVING: 0, // closer to resolution — one more clean check clears it
+  ACTIVE: 1,
+};
+
+const VERIFICATION_SEVERITY_PRIORITY: Record<string, number> = {
+  CRITICAL: 0,
+  HIGH: 1,
+  MEDIUM: 2,
+  LOW: 3,
+};
+
+/**
+ * Deterministically picks the single unresolved misconception (if any) a
+ * verification question should target this turn. `null` when nothing is
+ * eligible — the caller then falls back to ordinary question selection.
+ *
+ * Order: IMPROVING before ACTIVE (closest to resolving first), then higher
+ * severity, then normalized category, then id — a stable tiebreak so the
+ * same input always yields the same target.
+ */
+export function selectVerificationTarget(
+  candidates: VerificationCandidate[],
+): string | null {
+  const eligible = candidates.filter(
+    (c) => c.status === "ACTIVE" || c.status === "IMPROVING",
+  );
+  if (eligible.length === 0) return null;
+
+  const sorted = [...eligible].sort((a, b) => {
+    const sd =
+      (VERIFICATION_STATUS_PRIORITY[a.status] ?? 2) -
+      (VERIFICATION_STATUS_PRIORITY[b.status] ?? 2);
+    if (sd !== 0) return sd;
+
+    const sev =
+      (VERIFICATION_SEVERITY_PRIORITY[a.severity ?? "MEDIUM"] ?? 2) -
+      (VERIFICATION_SEVERITY_PRIORITY[b.severity ?? "MEDIUM"] ?? 2);
+    if (sev !== 0) return sev;
+
+    const ca = normalizeCategory(a.category);
+    const cb = normalizeCategory(b.category);
+    if (ca !== cb) return ca < cb ? -1 : 1;
+
+    return a.id < b.id ? -1 : 1;
+  });
+
+  return normalizeCategory(sorted[0].category);
+}
+
 export interface ResolutionOutcome {
   id: string;
   statusBefore: ResolvableStatus;

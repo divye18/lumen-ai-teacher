@@ -101,9 +101,11 @@ export {
   classifyMisconceptionResponse,
   planMisconceptionResolution,
   evaluateMisconceptionResolution,
+  selectVerificationTarget,
   type MisconceptionEvidenceSignal,
   type ResolvableStatus,
   type ResolvableMisconceptionState,
   type MisconceptionResolutionTransition,
   type ResolutionOutcome,
+  type VerificationCandidate,
 } from "./misconception-resolution";

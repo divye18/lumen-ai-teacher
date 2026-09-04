@@ -7,7 +7,9 @@ import {
   evaluateMisconceptionResolution,
   misconceptionCategoriesInQuestion,
   planMisconceptionResolution,
+  selectVerificationTarget,
   type ResolvableMisconceptionState,
+  type VerificationCandidate,
 } from "./misconception-resolution";
 
 function mcq(
@@ -331,5 +333,85 @@ describe("evaluateMisconceptionResolution — end-to-end composition", () => {
     const a = evaluateMisconceptionResolution(input);
     const b = evaluateMisconceptionResolution(input);
     expect(a).toEqual(b);
+  });
+});
+
+describe("selectVerificationTarget (9.2)", () => {
+  function candidate(
+    over: Partial<VerificationCandidate> = {},
+  ): VerificationCandidate {
+    return {
+      id: "m1",
+      category: "cache-is-ram",
+      status: "ACTIVE",
+      severity: "MEDIUM",
+      ...over,
+    };
+  }
+
+  it("an ACTIVE misconception is a valid verification target", () => {
+    expect(selectVerificationTarget([candidate({ status: "ACTIVE" })])).toBe(
+      "cache-is-ram",
+    );
+  });
+
+  it("an IMPROVING misconception is a valid verification target", () => {
+    expect(selectVerificationTarget([candidate({ status: "IMPROVING" })])).toBe(
+      "cache-is-ram",
+    );
+  });
+
+  it("a RESOLVED misconception is never targeted", () => {
+    expect(
+      selectVerificationTarget([candidate({ status: "RESOLVED" })]),
+    ).toBeNull();
+  });
+
+  it("returns null with no misconceptions", () => {
+    expect(selectVerificationTarget([])).toBeNull();
+  });
+
+  it("IMPROVING outranks ACTIVE regardless of list order", () => {
+    const active = candidate({
+      id: "m-active",
+      category: "active-one",
+      status: "ACTIVE",
+      severity: "CRITICAL",
+    });
+    const improving = candidate({
+      id: "m-improving",
+      category: "improving-one",
+      status: "IMPROVING",
+      severity: "LOW",
+    });
+    expect(selectVerificationTarget([active, improving])).toBe("improving-one");
+    expect(selectVerificationTarget([improving, active])).toBe("improving-one");
+  });
+
+  it("higher severity wins among same-status candidates", () => {
+    const low = candidate({
+      id: "m-low",
+      category: "low-one",
+      status: "ACTIVE",
+      severity: "LOW",
+    });
+    const critical = candidate({
+      id: "m-critical",
+      category: "critical-one",
+      status: "ACTIVE",
+      severity: "CRITICAL",
+    });
+    expect(selectVerificationTarget([low, critical])).toBe("critical-one");
+  });
+
+  it("is deterministic for the same multi-candidate input regardless of order", () => {
+    const a = candidate({ id: "a", category: "cat-a", status: "ACTIVE" });
+    const b = candidate({ id: "b", category: "cat-b", status: "ACTIVE" });
+    const c = candidate({ id: "c", category: "cat-c", status: "IMPROVING" });
+    const first = selectVerificationTarget([a, b, c]);
+    const second = selectVerificationTarget([c, b, a]);
+    const third = selectVerificationTarget([b, a, c]);
+    expect(first).toBe(second);
+    expect(second).toBe(third);
   });
 });

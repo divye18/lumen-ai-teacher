@@ -29,6 +29,7 @@ import {
   normalizeCategory,
   evaluateMisconceptionResolution,
   misconceptionCategoriesInQuestion,
+  selectVerificationTarget,
   type ExistingMisconception,
   type PersonalizationAdjustments,
   type ResolutionOutcome,
@@ -866,6 +867,23 @@ export function createTeachingOrchestrator(
           kind = "APPLICATION";
         }
 
+        // 9.2 — targeted verification: an unresolved misconception the
+        // learner has already received remediation for (it's a persisted row
+        // from a prior turn, not one just created this turn) is eligible to
+        // have the next question deliberately test it. Selection only; the
+        // status transition itself still happens exclusively through the
+        // existing 9.1 resolution loop once the learner answers.
+        const verifyMisconceptionCategory = selectVerificationTarget(
+          data.misconceptions
+            .filter((m) => m.status === "ACTIVE" || m.status === "IMPROVING")
+            .map((m) => ({
+              id: m.id,
+              category: m.category,
+              status: m.status,
+              severity: m.severity,
+            })),
+        );
+
         // Priority: deterministic structured assessment when the LLM is
         // unavailable and a safe structured question exists; otherwise the
         // free-form (LLM-evaluated) path; the deterministic free-form template
@@ -886,11 +904,24 @@ export function createTeachingOrchestrator(
                   .filter((q) => q.concept_key === engineConcept.key)
                   .map((q) => q.prompt),
                 preferFormat: personalization.targetFormatWeakness,
+                verifyMisconceptionCategory,
                 graph: buildTemplateGraphContext(
                   data.graphView,
                   engineConcept.key,
                 ),
               })
+            : null;
+
+        // Learner-safe rationale: only surfaced when the picked question
+        // actually landed on the verification target (never forced, never
+        // named). Existing personalization note takes priority if present.
+        const verificationNote =
+          structured &&
+          verifyMisconceptionCategory &&
+          misconceptionCategoriesInQuestion(structured.question).includes(
+            verifyMisconceptionCategory,
+          )
+            ? "Let's try this from a different angle."
             : null;
 
         // Deterministic-assessment dead-end guard. With no LLM, free-form
@@ -977,7 +1008,7 @@ export function createTeachingOrchestrator(
             decision: nextDecisionView(decision, facts, {
               conceptTitle: engineConcept.title,
               misconceptionDetectionCount: maxDetections || undefined,
-              personalizationNote: personalization.note,
+              personalizationNote: personalization.note ?? verificationNote,
             }),
             content: null,
             question: {
