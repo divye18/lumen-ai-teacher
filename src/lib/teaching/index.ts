@@ -81,3 +81,13 @@ export {
   type EngineConceptContext,
   type EngineSignalContext,
 } from "./prompts";
+export {
+  explainNextStep,
+  type NextStepExplanation,
+  type ExplainNextStepInput,
+} from "./why-next";
+export {
+  buildMisconceptionDetail,
+  type MisconceptionSource,
+  type MisconceptionDetailView,
+} from "./misconception-view";

@@ -12,6 +12,8 @@ const GLYPH: Record<SessionEvent["kind"], { mark: string; tone: string }> = {
   misconception: { mark: "!", tone: "var(--color-warning)" },
   correct: { mark: "✓", tone: "var(--color-positive)" },
   mastery: { mark: "•", tone: "var(--color-ink-muted)" },
+  example: { mark: "✎", tone: "var(--color-accent)" },
+  difficulty: { mark: "▲", tone: "var(--color-signal-challenging)" },
 };
 
 /**

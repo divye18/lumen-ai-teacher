@@ -18,6 +18,7 @@ import { SessionNotFoundError } from "@/lib/errors";
 import { err, ok, type Result } from "@/lib/result";
 
 import { buildObservations, type Observation } from "./observations";
+import { buildLearningStory } from "./learning-story";
 import {
   buildMasteryTrajectory,
   type MasteryTrajectory,
@@ -51,6 +52,8 @@ export interface SessionReport {
   misconceptionsRepeated: number;
   outcomes: ConceptOutcome[];
   insights: string[];
+  /** An ordered, evidence-backed narrative of how the session unfolded. */
+  learningStory: string[];
   recommendation: RecommendationView;
   /** Total mastery points gained across strengthened concepts. */
   masteryGained: number;
@@ -216,10 +219,18 @@ export async function getSessionReport(
   };
   const graph = graphRes.ok ? graphRes.value : emptyGraph;
 
+  const sessionInteractions = interactionsRes.ok ? interactionsRes.value : [];
   const strategyMemory = buildStrategyMemory({
-    interactions: interactionsRes.ok ? interactionsRes.value : [],
+    interactions: sessionInteractions,
     answers,
     questions,
+  });
+  const learningStory = buildLearningStory({
+    outcomes,
+    answers,
+    questions,
+    interactions: sessionInteractions,
+    repeatedMisconception: repeatedFromSnapshot > 0,
   });
   const learningPattern = buildObservations({
     answers,
@@ -316,6 +327,7 @@ export async function getSessionReport(
     misconceptionsRepeated: repeatedFromSnapshot,
     outcomes,
     insights,
+    learningStory,
     recommendation,
     masteryGained: Math.round(masteryGained),
     conceptsReinforced,

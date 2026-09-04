@@ -26,16 +26,21 @@ import { generateQuestion, questionKindForMastery } from "@/lib/assessment";
 import { evaluateAnswer } from "@/lib/assessment/evaluator";
 import {
   applyInteractionOutcome,
+  normalizeCategory,
   type ExistingMisconception,
 } from "@/lib/learner";
 import {
   createTeachingEngine,
+  explainNextStep,
   generateTeachingContent,
   masteryBandLabel,
   nextQuestionKind,
   scoreToPoints,
+  titleCase,
+  type PolicyFacts,
   type ResolvedTeachingDecision,
 } from "@/lib/teaching";
+import { buildMisconceptionDetail } from "@/lib/teaching/misconception-view";
 import {
   lessonPlanSchema,
   type LessonPlan,
@@ -209,6 +214,11 @@ export function createTeachingOrchestrator(
           "Lesson complete — every planned concept has been taught and checked.",
         ],
         overrides: [],
+        whyThisNext: {
+          headline: "Lesson complete",
+          reason:
+            "You've worked through every concept — Lumen has a full picture of where you stand.",
+        },
       },
       content: null,
       question: null,
@@ -262,7 +272,44 @@ export function createTeachingOrchestrator(
       source: decision.source,
       adaptationNarrative: decision.adaptationNarrative,
       overrides: decision.overrides,
+      whyThisNext: null,
     };
+  }
+
+  const QUESTION_NEXT_ACTIONS = new Set(["ASK", "ASSESS"]);
+
+  /**
+   * A decision view for a step Lumen is about to take, with the deterministic
+   * "why this next?" explanation attached. Used for the served step and for the
+   * `nextDecision` after an answer — never for bare history records.
+   */
+  function nextDecisionView(
+    decision: ResolvedTeachingDecision,
+    facts: PolicyFacts,
+    opts: {
+      conceptTitle: string;
+      nextConceptTitle?: string | null;
+      misconceptionDetectionCount?: number;
+    },
+  ): DecisionView {
+    const view = toDecisionView(decision);
+    view.whyThisNext = explainNextStep({
+      action: decision.action,
+      difficultyDirection: decision.difficultyDirection,
+      nextActionKind: decision.nextAction
+        ? QUESTION_NEXT_ACTIONS.has(decision.nextAction)
+          ? "question"
+          : "teaching"
+        : null,
+      facts,
+      conceptTitle: titleCase(opts.conceptTitle.replace(/-/g, " ")),
+      nextConceptTitle: opts.nextConceptTitle
+        ? titleCase(opts.nextConceptTitle.replace(/-/g, " "))
+        : null,
+      weakPrerequisiteTitle: facts.weakUpstreamPrerequisite?.title ?? null,
+      misconceptionDetectionCount: opts.misconceptionDetectionCount,
+    });
+    return view;
   }
 
   async function loadContext(
@@ -595,6 +642,15 @@ export function createTeachingOrchestrator(
       }
 
       const facts = buildPolicyFacts(data);
+      const maxDetections = Math.max(
+        0,
+        ...data.misconceptions.map(
+          (m) =>
+            Number(
+              (m.metadata as Record<string, unknown> | null)?.detections ?? 0,
+            ) || (Array.isArray(m.evidence) ? m.evidence.length : 0),
+        ),
+      );
       const engineConcept = buildEngineConcept(
         data.currentConcept,
         plan.concepts,
@@ -614,7 +670,10 @@ export function createTeachingOrchestrator(
       await recordDecision(data, decision, currentConceptId);
 
       const advanceConcept = async (
-        decisionView: DecisionView,
+        decision: ResolvedTeachingDecision,
+        override?: Partial<
+          Pick<DecisionView, "reason" | "adaptationNarrative">
+        >,
       ): Promise<Result<TeachingStepView>> => {
         await lessons.setConceptStatus(data.currentConcept.id, "COMPLETED");
         const nextCursor = data.session.plan_cursor + 1;
@@ -635,6 +694,13 @@ export function createTeachingOrchestrator(
         }
         const refreshed = await sessions.get(data.session.id);
         const sessionRow = refreshed.ok ? refreshed.value : data.session;
+        const decisionView = {
+          ...nextDecisionView({ ...decision, action: "MOVE_FORWARD" }, facts, {
+            conceptTitle: engineConcept.title,
+            nextConceptTitle: nextConcept?.title ?? null,
+          }),
+          ...override,
+        };
         return ok({
           sessionId: data.session.id,
           decision: decisionView,
@@ -652,7 +718,7 @@ export function createTeachingOrchestrator(
 
       // ── MOVE_FORWARD ───────────────────────────────────────────────
       if (decision.action === "MOVE_FORWARD") {
-        return advanceConcept(toDecisionView(decision));
+        return advanceConcept(decision);
       }
 
       // ── RECAP ──────────────────────────────────────────────────────
@@ -727,9 +793,7 @@ export function createTeachingOrchestrator(
               structuredQuestionIdsHere.has(a.question_id),
           );
           if (clearedStructuredHere) {
-            return advanceConcept({
-              ...toDecisionView(decision),
-              action: "MOVE_FORWARD",
+            return advanceConcept(decision, {
               reason:
                 "You've cleared every structured check I have for this concept — moving on.",
               adaptationNarrative: [
@@ -788,7 +852,10 @@ export function createTeachingOrchestrator(
 
           return ok({
             sessionId: data.session.id,
-            decision: toDecisionView(decision),
+            decision: nextDecisionView(decision, facts, {
+              conceptTitle: engineConcept.title,
+              misconceptionDetectionCount: maxDetections || undefined,
+            }),
             content: null,
             question: {
               questionId: questionRow.value.id,
@@ -866,7 +933,10 @@ export function createTeachingOrchestrator(
 
         return ok({
           sessionId: data.session.id,
-          decision: toDecisionView(decision),
+          decision: nextDecisionView(decision, facts, {
+            conceptTitle: engineConcept.title,
+            misconceptionDetectionCount: maxDetections || undefined,
+          }),
           content: null,
           question: {
             questionId: questionRow.value.id,
@@ -956,7 +1026,10 @@ export function createTeachingOrchestrator(
 
       return ok({
         sessionId: data.session.id,
-        decision: toDecisionView(decision),
+        decision: nextDecisionView(decision, facts, {
+          conceptTitle: engineConcept.title,
+          misconceptionDetectionCount: maxDetections || undefined,
+        }),
         content: {
           title: content.value.title,
           body: content.value.body,
@@ -1210,6 +1283,51 @@ export function createTeachingOrchestrator(
         });
       }
 
+      // Build the "Lumen noticed a pattern" detail from the now-persisted row —
+      // whichever misconception this answer touched (created or strengthened).
+      let misconceptionDetail: EvaluationView["misconception"] = null;
+      const touchedCategory =
+        outcome.misconceptionPlan.creates[0]?.category ??
+        existing.find((e) =>
+          outcome.misconceptionPlan.strengthens.some((s) => s.id === e.id),
+        )?.category ??
+        evaluation.misconceptionCandidates?.[0]?.category ??
+        null;
+      const strengthenedId =
+        outcome.misconceptionPlan.strengthens[0]?.id ?? null;
+      if (touchedCategory || strengthenedId) {
+        const rowsRes = await misconceptions.listForConcept(
+          deps.userId,
+          conceptId,
+        );
+        const rows = rowsRes.ok ? rowsRes.value : [];
+        const row =
+          rows.find((r) => r.id === strengthenedId) ??
+          rows.find(
+            (r) =>
+              touchedCategory != null &&
+              normalizeCategory(r.category) ===
+                normalizeCategory(touchedCategory),
+          ) ??
+          null;
+        if (row) {
+          const detections =
+            Number(
+              (row.metadata as Record<string, unknown> | null)?.detections ?? 0,
+            ) || (Array.isArray(row.evidence) ? row.evidence.length : 1);
+          misconceptionDetail = buildMisconceptionDetail({
+            category: row.category,
+            description: row.description,
+            severity: row.severity,
+            status: row.status,
+            firstDetectedAtISO: new Date(row.first_detected_at).toISOString(),
+            detectionCount: detections,
+            isRecurrence: outcome.misconceptionPlan.strengthens.length > 0,
+            insight: evaluation.misconceptionInsight ?? null,
+          });
+        }
+      }
+
       const snapshot = {
         ...((data.session.mastery_snapshot as Record<string, unknown> | null) ??
           {}),
@@ -1252,6 +1370,7 @@ export function createTeachingOrchestrator(
           feedback: evaluation.feedback,
           source: evaluation.source,
           misconceptionInsight: evaluation.misconceptionInsight ?? null,
+          misconception: misconceptionDetail,
           breakdown: evaluation.breakdown ?? null,
         },
         learnerUpdate: {
@@ -1267,7 +1386,10 @@ export function createTeachingOrchestrator(
             outcome.misconceptionPlan.strengthens.length,
           repeatedMisconception: outcome.hasRepeatedMisconception,
         },
-        nextDecision: toDecisionView(nextDecision),
+        nextDecision: nextDecisionView(nextDecision, nextFacts, {
+          conceptTitle: next.data.currentConcept.title,
+          misconceptionDetectionCount: misconceptionDetail?.detectionCount,
+        }),
         progress: progressOf(
           next.data.session,
           next.data.lessonConcepts,

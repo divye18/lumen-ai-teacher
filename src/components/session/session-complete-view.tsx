@@ -171,6 +171,38 @@ export function SessionCompleteView({ report }: { report: SessionReport }) {
         </div>
       </Panel>
 
+      {report.learningStory.length > 0 ? (
+        <Panel inset>
+          <div className="flex items-center gap-2">
+            <LumenMark className="size-4 text-[var(--color-accent)]" />
+            <p className="text-[11px] font-medium tracking-wide text-[var(--color-ink-faint)] uppercase">
+              The learning story
+            </p>
+          </div>
+          <ol className="mt-4 flex flex-col">
+            {report.learningStory.map((line, i) => (
+              <motion.li
+                key={line}
+                initial={reduce ? false : { opacity: 0, x: -6 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: reduce ? 0 : 0.1 + i * 0.08 }}
+                className="flex gap-3 pb-3 last:pb-0"
+              >
+                <div className="flex flex-col items-center pt-1">
+                  <span className="size-1.5 rounded-full bg-[var(--color-accent)]" />
+                  {i < report.learningStory.length - 1 ? (
+                    <span className="my-1 w-px flex-1 bg-[var(--color-border)]" />
+                  ) : null}
+                </div>
+                <p className="text-[13px] leading-relaxed text-[var(--color-ink)]">
+                  {line}
+                </p>
+              </motion.li>
+            ))}
+          </ol>
+        </Panel>
+      ) : null}
+
       {report.graph.nodes.length > 1 ? (
         <KnowledgeGraphPanel
           graph={report.graph}

@@ -15,6 +15,7 @@ function decision(over: Partial<DecisionView> = {}): DecisionView {
     source: "policy",
     adaptationNarrative: [],
     overrides: [],
+    whyThisNext: null,
     ...over,
   };
 }
@@ -32,6 +33,7 @@ function result(
       reasoningQuality: "partial",
       source: "structured",
       misconceptionInsight: null,
+      misconception: null,
       breakdown: null,
       missingConcepts: [],
       feedback: "…",
@@ -112,6 +114,20 @@ describe("buildSessionEvents", () => {
     });
     expect(events.some((e) => e.kind === "strategy")).toBe(true);
     expect(events.some((e) => e.kind === "reteach")).toBe(true);
+  });
+
+  it("records a worked example and a difficulty increase as their own events", () => {
+    const events = buildSessionEvents({
+      decisions: [
+        decision({ action: "EXAMPLE", targetConceptKey: "cache" }),
+        decision({ action: "INCREASE_DIFFICULTY", targetConceptKey: "cache" }),
+      ],
+      results: [],
+      conceptTitles: titles,
+      startedAtMs: Date.now(),
+    });
+    expect(events.some((e) => e.kind === "example")).toBe(true);
+    expect(events.some((e) => e.kind === "difficulty")).toBe(true);
   });
 
   it("fabricates nothing when there is no history", () => {

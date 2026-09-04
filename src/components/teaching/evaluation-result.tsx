@@ -3,7 +3,8 @@
 import { motion, useReducedMotion } from "framer-motion";
 
 import { Button } from "@/components/ui/button";
-import { MasteryMeter } from "@/components/ui/mastery-meter";
+import { MasteryTransition } from "@/components/learning/mastery-transition";
+import { MisconceptionReveal } from "@/components/teaching/misconception-reveal";
 import type { InteractionResultView } from "@/lib/session/views";
 import {
   classificationPresentation,
@@ -44,7 +45,6 @@ export function EvaluationResult({
   const { evaluation, learnerUpdate } = result;
   const cls = classificationPresentation(evaluation.classification);
   const style = TONE_STYLE[cls.tone];
-  const delta = learnerUpdate.masteryAfter - learnerUpdate.masteryBefore;
 
   return (
     <motion.div
@@ -117,7 +117,12 @@ export function EvaluationResult({
         ) : null}
       </div>
 
-      {evaluation.misconceptionInsight ? (
+      {evaluation.misconception ? (
+        <MisconceptionReveal
+          misconception={evaluation.misconception}
+          className="mt-3"
+        />
+      ) : evaluation.misconceptionInsight ? (
         <div className="mt-3 rounded-[var(--radius-md)] border border-[color-mix(in_oklab,var(--color-warning)_30%,transparent)] bg-[color-mix(in_oklab,var(--color-warning)_7%,transparent)] p-3.5">
           <p className="text-[10px] font-semibold tracking-wider text-[var(--color-warning)] uppercase">
             Lumen noticed a pattern
@@ -129,30 +134,10 @@ export function EvaluationResult({
       ) : null}
 
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
-        <div className="rounded-[var(--radius-md)] border border-[var(--color-border)] p-4">
-          <p className="text-[11px] font-medium tracking-wide text-[var(--color-ink-faint)] uppercase">
-            {learnerUpdate.conceptKey ? "Mastery update" : "Mastery"}
-          </p>
-          <div className="mt-2">
-            <MasteryMeter
-              value={learnerUpdate.masteryAfter}
-              previous={learnerUpdate.masteryBefore}
-            />
-          </div>
-          <p
-            className={cn(
-              "mt-2 text-[12px] font-medium",
-              delta > 0 && "text-[var(--color-positive)]",
-              delta < 0 && "text-[var(--color-warning)]",
-              delta === 0 && "text-[var(--color-ink-faint)]",
-            )}
-          >
-            {delta > 0 ? `+${delta}` : delta}{" "}
-            <span className="font-normal text-[var(--color-ink-muted)]">
-              {learnerUpdate.reason}
-            </span>
-          </p>
-        </div>
+        <MasteryTransition
+          learnerUpdate={learnerUpdate}
+          evaluation={evaluation}
+        />
 
         <div className="rounded-[var(--radius-md)] border border-[var(--color-border)] p-4">
           <p className="text-[11px] font-medium tracking-wide text-[var(--color-ink-faint)] uppercase">

@@ -5,6 +5,9 @@ import Link from "next/link";
 import { motion, useReducedMotion } from "framer-motion";
 
 import { AdaptiveTransition } from "@/components/learning/adaptive-transition";
+import { LearningSignalCard } from "@/components/learning/learning-signal-card";
+import { WhyNextCard } from "@/components/learning/why-next-card";
+import { TeachingRoomMap } from "@/components/graph/teaching-room-map";
 import { EvaluationResult } from "@/components/teaching/evaluation-result";
 import {
   LearnerStatePanel,
@@ -378,6 +381,7 @@ export function TeachingRoom({
     null;
   const presence = presenceForContext({
     phase,
+    decisionAction: activeDecision?.action ?? null,
     voiceState: voiceEnabled ? voice.state : undefined,
     lastClassification,
     speaking: voice.state === "SPEAKING",
@@ -385,6 +389,19 @@ export function TeachingRoom({
 
   const visual = phase === "teaching" ? (step?.content?.visual ?? null) : null;
   const masteryPct = Math.round(panelSnapshot.masteryPoints);
+
+  // The "why this next?" explanation for the step currently on screen.
+  const stepWhyNext =
+    (phase === "teaching" || phase === "question") && step
+      ? step.decision.whyThisNext
+      : null;
+  const previousDecision =
+    decisionHistory.length >= 2
+      ? decisionHistory[decisionHistory.length - 2]
+      : null;
+  const mapRelevance =
+    activeDecision?.whyThisNext?.reason ??
+    (phase === "question" ? "Lumen is checking this concept now." : null);
 
   return (
     <div className="flex min-h-svh flex-col bg-[var(--color-canvas)]">
@@ -426,7 +443,16 @@ export function TeachingRoom({
 
         {/* Centre: visual canvas + teaching panel */}
         <main className="min-w-0 space-y-5">
-          {visual ? <VisualCanvas directive={visual} /> : null}
+          {visual ? (
+            <div className="space-y-1.5">
+              <VisualCanvas directive={visual} />
+              {phase === "teaching" && step?.content?.visualRationale ? (
+                <p className="px-1 text-[11px] leading-snug text-[var(--color-ink-faint)]">
+                  {step.content.visualRationale}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
 
           {voiceEnabled && voice.caption && phase !== "question" ? (
             <CaptionTrack
@@ -456,6 +482,10 @@ export function TeachingRoom({
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: reduce ? 0 : 0.22 }}
             >
+              {stepWhyNext ? (
+                <WhyNextCard explanation={stepWhyNext} className="mb-4" />
+              ) : null}
+
               {phase === "teaching" && step?.content ? (
                 <>
                   <ConceptEyebrow
@@ -546,6 +576,8 @@ export function TeachingRoom({
                   <AdaptiveTransition
                     headline={transitionHeadline(result)}
                     decision={result.nextDecision}
+                    previousStrategy={previousDecision?.strategy ?? null}
+                    previousAction={previousDecision?.action ?? null}
                     onDone={toContinue}
                   />
                   <div className="mt-4 flex justify-end">
@@ -585,8 +617,11 @@ export function TeachingRoom({
           </div>
         </main>
 
-        {/* Right rail: learning signal + timeline */}
-        <aside className="flex flex-col gap-4 lg:sticky lg:top-20 lg:h-fit">
+        {/* Right rail: learning signal + timeline + live map */}
+        <aside className="flex flex-col gap-4 lg:sticky lg:top-20 lg:max-h-[calc(100svh-6rem)] lg:overflow-y-auto lg:pb-4">
+          {(phase === "result" || phase === "transition") && result ? (
+            <LearningSignalCard result={result} />
+          ) : null}
           <LearnerStatePanel
             snapshot={panelSnapshot}
             decision={activeDecision}
@@ -596,6 +631,13 @@ export function TeachingRoom({
             graph={graphState}
             currentConceptKey={currentConceptKey}
           />
+          {graphState ? (
+            <TeachingRoomMap
+              graph={graphState}
+              currentConceptKey={currentConceptKey}
+              relevanceNote={mapRelevance}
+            />
+          ) : null}
           <SessionTimelinePanel events={events} />
         </aside>
       </div>
@@ -603,12 +645,20 @@ export function TeachingRoom({
   );
 }
 
+const PRESENCE_STATUS_LABEL: Record<string, string> = {
+  LISTENING: "Listening",
+  THINKING: "Thinking",
+  TEACHING: "Teaching",
+  CHECKING: "Checking",
+  ADAPTING: "Adapting",
+  CELEBRATING: "Nice work",
+  RECAP: "Recap",
+  IDLE: "Ready",
+};
+
 function presenceStatusLabel(presence: string, phase: Phase): string {
-  if (phase === "loading" || phase === "transition") return "Thinking";
-  if (presence === "LISTENING") return "Listening";
-  if (presence === "SPEAKING") return "Speaking";
   if (phase === "complete") return "Done";
-  return "Ready";
+  return PRESENCE_STATUS_LABEL[presence] ?? "Ready";
 }
 
 function ConceptEyebrow({

@@ -8,7 +8,14 @@ import { actionLabel } from "./learning-presentation";
  */
 
 export type SessionEventKind =
-  "concept" | "strategy" | "misconception" | "correct" | "reteach" | "mastery";
+  | "concept"
+  | "strategy"
+  | "misconception"
+  | "correct"
+  | "reteach"
+  | "mastery"
+  | "example"
+  | "difficulty";
 
 export interface SessionEvent {
   id: string;
@@ -25,6 +32,21 @@ export interface SessionEventInput {
   /** conceptKey -> title */
   conceptTitles: Record<string, string>;
   startedAtMs: number | null;
+}
+
+const STRATEGY_PHRASE: Record<string, string> = {
+  formal: "precise definitions",
+  conversational: "a plain-language explanation",
+  "example-first": "a worked example",
+  "analogy-first": "an analogy",
+  "visual-first": "a mental model",
+  socratic: "guided questioning",
+};
+
+function strategyPhrase(strategy: string): string {
+  return (
+    STRATEGY_PHRASE[strategy] ?? `a ${strategy.replace(/-/g, " ")} approach`
+  );
 }
 
 function stamp(startedAtMs: number | null): string | undefined {
@@ -63,8 +85,8 @@ export function buildSessionEvents(input: SessionEventInput): SessionEvent[] {
       events.push({
         id: `strategy-${i}`,
         kind: "strategy",
-        label: `Switched to a ${d.strategy.replace(/-/g, " ")} approach`,
-        detail: d.adaptationNarrative[0],
+        label: `Switched to ${strategyPhrase(d.strategy)}`,
+        detail: d.whyThisNext?.reason ?? d.adaptationNarrative[0],
       });
     }
     lastStrategy = d.strategy;
@@ -74,7 +96,27 @@ export function buildSessionEvents(input: SessionEventInput): SessionEvent[] {
         id: `reteach-${i}`,
         kind: "reteach",
         label: "Re-taught with a different representation",
-        detail: d.reason,
+        detail: d.whyThisNext?.reason ?? d.reason,
+      });
+    }
+
+    if (d.action === "EXAMPLE") {
+      events.push({
+        id: `example-${i}`,
+        kind: "example",
+        label: "Worked example",
+        detail: d.whyThisNext?.headline ?? `${title}`,
+      });
+    }
+
+    if (d.action === "INCREASE_DIFFICULTY") {
+      events.push({
+        id: `harder-${i}`,
+        kind: "difficulty",
+        label: "Difficulty increased",
+        detail:
+          d.whyThisNext?.reason ??
+          "Mastery is high enough for a harder question.",
       });
     }
 

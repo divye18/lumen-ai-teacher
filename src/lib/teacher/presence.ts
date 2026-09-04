@@ -2,17 +2,20 @@
  * TEACHER PRESENCE — state only, no teaching logic.
  *
  * `TeacherPresence` (the component) is a pure rendering layer. This module maps
- * the Teaching Room's real state (phase + voice state + last result) to one of
- * a small set of presence states. It never decides what to teach.
+ * the Teaching Room's real state (phase + resolved teaching action + voice
+ * state + last result) to one of a small set of presence states. It never
+ * decides what to teach — it only names what the room is already doing.
  */
 
 export const TEACHER_PRESENCE_STATES = [
-  "IDLE",
-  "THINKING",
-  "SPEAKING",
   "LISTENING",
+  "THINKING",
+  "TEACHING",
+  "CHECKING",
+  "ADAPTING",
   "CELEBRATING",
-  "ENCOURAGING",
+  "RECAP",
+  "IDLE",
 ] as const;
 export type TeacherPresenceState = (typeof TEACHER_PRESENCE_STATES)[number];
 
@@ -26,6 +29,8 @@ export interface PresenceContext {
     | "transition"
     | "complete"
     | "error";
+  /** The resolved teaching action for the current step, when known. */
+  decisionAction?: string | null;
   /** Voice controller state, when voice is active. */
   voiceState?: "IDLE" | "LISTENING" | "PROCESSING" | "SPEAKING" | "ERROR";
   /** Classification of the most recent answer, if any. */
@@ -35,27 +40,26 @@ export interface PresenceContext {
 }
 
 export function presenceForContext(ctx: PresenceContext): TeacherPresenceState {
+  // Voice, when live, is the most concrete signal of what the teacher is doing.
   if (ctx.voiceState === "LISTENING") return "LISTENING";
-  if (ctx.voiceState === "SPEAKING" || ctx.speaking) return "SPEAKING";
+  if (ctx.voiceState === "SPEAKING" || ctx.speaking) return "TEACHING";
   if (ctx.voiceState === "PROCESSING") return "THINKING";
+
+  if (ctx.decisionAction === "RECAP" && ctx.phase !== "result") return "RECAP";
 
   switch (ctx.phase) {
     case "loading":
-    case "transition":
       return "THINKING";
+    case "transition":
+      return "ADAPTING";
     case "teaching":
-      return "SPEAKING";
+      return "TEACHING";
     case "question":
-      return "LISTENING";
+      return "CHECKING";
     case "result":
       if (ctx.lastClassification === "CORRECT") return "CELEBRATING";
-      if (
-        ctx.lastClassification === "INCORRECT" ||
-        ctx.lastClassification === "UNCERTAIN"
-      ) {
-        return "ENCOURAGING";
-      }
-      return "IDLE";
+      // Any non-correct answer means Lumen is now adjusting what comes next.
+      return "ADAPTING";
     case "complete":
       return "CELEBRATING";
     case "error":
@@ -82,7 +86,7 @@ export function presenceVisual(state: TeacherPresenceState): PresenceVisual {
         label: "Listening",
         energy: 0.8,
       };
-    case "SPEAKING":
+    case "TEACHING":
       return { color: "var(--color-accent)", label: "Teaching", energy: 1 };
     case "THINKING":
       return {
@@ -90,17 +94,29 @@ export function presenceVisual(state: TeacherPresenceState): PresenceVisual {
         label: "Thinking",
         energy: 0.5,
       };
+    case "CHECKING":
+      return {
+        color: "var(--color-signal-challenging)",
+        label: "Checking",
+        energy: 0.7,
+      };
+    case "ADAPTING":
+      return {
+        color: "var(--color-signal-reinforcing)",
+        label: "Adapting",
+        energy: 0.9,
+      };
     case "CELEBRATING":
       return {
         color: "var(--color-positive)",
         label: "Nice work",
         energy: 1.2,
       };
-    case "ENCOURAGING":
+    case "RECAP":
       return {
-        color: "var(--color-signal-reinforcing)",
-        label: "With you",
-        energy: 0.6,
+        color: "var(--color-signal-revisiting)",
+        label: "Recap",
+        energy: 0.4,
       };
     default:
       return { color: "var(--color-ink-faint)", label: "Ready", energy: 0.25 };

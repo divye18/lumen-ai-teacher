@@ -31,7 +31,7 @@ export function TeacherPresence({
   const id = useId().replace(/:/g, "");
   const visual = presenceVisual(state);
   const lvl = Math.min(1, Math.max(0, level));
-  const reactive = state === "LISTENING" || state === "SPEAKING";
+  const reactive = state === "LISTENING" || state === "TEACHING";
 
   const coreScale = reduce
     ? 1
@@ -127,7 +127,7 @@ export function TeacherPresence({
             strokeWidth="1.25"
             opacity={0.4}
             animate={
-              reduce ? {} : { rotate: state === "SPEAKING" ? [0, 360] : 0 }
+              reduce ? {} : { rotate: state === "TEACHING" ? [0, 360] : 0 }
             }
             transition={{ duration: 18, repeat: Infinity, ease: "linear" }}
             style={{ transformOrigin: "100px 100px" }}
@@ -154,7 +154,7 @@ export function TeacherPresence({
           />
 
           {/* Speaking pulse dots */}
-          {state === "SPEAKING" && !reduce
+          {state === "TEACHING" && !reduce
             ? [0, 1, 2].map((i) => (
                 <motion.circle
                   key={i}

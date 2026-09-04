@@ -8,6 +8,8 @@ import type {
   TeachingAction,
   TeachingStyle,
 } from "@/lib/teaching/contracts";
+import type { NextStepExplanation } from "@/lib/teaching/why-next";
+import type { MisconceptionDetailView } from "@/lib/teaching/misconception-view";
 
 /**
  * Clean DTOs returned by the teaching orchestrator. No raw DB rows, no
@@ -79,6 +81,13 @@ export interface DecisionView {
   /** "Visible intelligence" — concise, never chain-of-thought. */
   adaptationNarrative: string[];
   overrides: string[];
+  /**
+   * Learner-facing "why is Lumen doing this next?" — a deterministic
+   * explanation built from the resolved action + policy facts. `null` on
+   * decisions where a next-step rationale doesn't apply (e.g. the very first
+   * step, or a bare decision recorded for history).
+   */
+  whyThisNext: NextStepExplanation | null;
 }
 
 export interface QuestionView {
@@ -136,6 +145,13 @@ export interface EvaluationView {
    * taxonomy id). `null` when none / the answer was correct.
    */
   misconceptionInsight: { label: string; explanation: string } | null;
+  /**
+   * The full misconception picture for the "Lumen noticed a pattern" reveal —
+   * built from the persisted `misconceptions` row (first seen, recurrence
+   * count, severity, status) plus what Lumen is doing about it. `null` when
+   * this answer surfaced no misconception.
+   */
+  misconception: MisconceptionDetailView | null;
   /** Per-item breakdown for a structured answer (for the result UI). */
   breakdown: {
     summary: string;
@@ -143,6 +159,8 @@ export interface EvaluationView {
     correctAnswerText?: string;
   } | null;
 }
+
+export type { MisconceptionDetailView };
 
 export interface LearnerUpdateView {
   conceptKey: string;
