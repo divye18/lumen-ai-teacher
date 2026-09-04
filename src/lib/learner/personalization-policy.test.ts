@@ -108,4 +108,52 @@ describe("personalizeTeaching", () => {
     // example-recovery outranks learning-momentum for the surfaced sentence
     expect(adj.note).toMatch(/example/i);
   });
+
+  describe("recurring-misconception note (9.3 progress-aware wording)", () => {
+    it("ACTIVE (improving: false) keeps the existing note", () => {
+      const adj = personalizeTeaching(
+        profile([signal("recurring-misconception", { improving: false })]),
+      );
+      expect(adj.note).toBe(
+        "Still targeting a mix-up that has come back more than once.",
+      );
+    });
+
+    it("IMPROVING (improving: true) surfaces the progress-aware note", () => {
+      const adj = personalizeTeaching(
+        profile([signal("recurring-misconception", { improving: true })]),
+      );
+      expect(adj.note).toBe(
+        "One more check on a mix-up you're already starting to clear.",
+      );
+      expect(adj.note).not.toBe(
+        "Still targeting a mix-up that has come back more than once.",
+      );
+    });
+
+    it("missing/undefined detail.improving falls back to the ACTIVE note (safe default)", () => {
+      const adj = personalizeTeaching(
+        profile([signal("recurring-misconception", {})]),
+      );
+      expect(adj.note).toBe(
+        "Still targeting a mix-up that has come back more than once.",
+      );
+    });
+
+    it("never leaks the raw status string into the note", () => {
+      const adj = personalizeTeaching(
+        profile([signal("recurring-misconception", { improving: true })]),
+      );
+      expect(adj.note).not.toMatch(/\bACTIVE\b|\bIMPROVING\b|\bRESOLVED\b/);
+    });
+
+    it("is deterministic", () => {
+      const p = profile([
+        signal("recurring-misconception", { improving: true }),
+      ]);
+      expect(JSON.stringify(personalizeTeaching(p))).toBe(
+        JSON.stringify(personalizeTeaching(p)),
+      );
+    });
+  });
 });

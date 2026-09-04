@@ -252,6 +252,132 @@ describe("deriveLearningProfile", () => {
     ).toBeTruthy();
   });
 
+  describe("recurring-misconception — progress-aware wording (9.3)", () => {
+    function misconception(
+      over: Partial<MisconceptionRow> = {},
+    ): MisconceptionRow {
+      return {
+        id: "mc1",
+        category: "confuses-cache-and-ram",
+        description: "…",
+        confidence: 0.7,
+        status: "ACTIVE",
+        severity: "MEDIUM",
+        evidence: [{ quote: "x" }, { quote: "y" }],
+        metadata: { detections: 3 },
+        last_detected_at: "2026-01-10T00:00:00.000Z",
+        ...over,
+      } as unknown as MisconceptionRow;
+    }
+
+    const enoughEvidence = {
+      questions: [q("q1"), q("q2"), q("q3"), q("q4")],
+      answers: [
+        ans("q1", "CORRECT"),
+        ans("q2", "CORRECT"),
+        ans("q3", "CORRECT"),
+        ans("q4", "CORRECT"),
+      ],
+    };
+
+    it("ACTIVE keeps the existing 'still tracking it' interpretation", () => {
+      const p = deriveLearningProfile(
+        base({
+          misconceptions: [misconception({ status: "ACTIVE" })],
+          ...enoughEvidence,
+        }),
+      );
+      const s = p.signals.find((x) => x.kind === "recurring-misconception");
+      expect(s).toBeTruthy();
+      expect(s!.detail.improving).toBe(false);
+      expect(s!.summary).toBe(
+        "One specific mix-up keeps coming back — Lumen is tracking it and will keep targeting it.",
+      );
+    });
+
+    it("IMPROVING produces the new progress-aware interpretation", () => {
+      const p = deriveLearningProfile(
+        base({
+          misconceptions: [misconception({ status: "IMPROVING" })],
+          ...enoughEvidence,
+        }),
+      );
+      const s = p.signals.find((x) => x.kind === "recurring-misconception");
+      expect(s).toBeTruthy();
+      expect(s!.detail.improving).toBe(true);
+      expect(s!.summary).toBe(
+        "One specific mix-up is starting to clear — Lumen will check it once more to make sure it sticks.",
+      );
+      // Distinct from the ACTIVE wording.
+      expect(s!.summary).not.toBe(
+        "One specific mix-up keeps coming back — Lumen is tracking it and will keep targeting it.",
+      );
+    });
+
+    it("RESOLVED is excluded — unchanged from prior behavior", () => {
+      const p = deriveLearningProfile(
+        base({
+          misconceptions: [misconception({ status: "RESOLVED" })],
+          ...enoughEvidence,
+        }),
+      );
+      expect(
+        p.signals.find((x) => x.kind === "recurring-misconception"),
+      ).toBeUndefined();
+    });
+
+    it("no misconception history stays safe / unchanged", () => {
+      const p = deriveLearningProfile(base({ misconceptions: [] }));
+      expect(
+        p.signals.find((x) => x.kind === "recurring-misconception"),
+      ).toBeUndefined();
+    });
+
+    it("multiple misconceptions — deterministic target, still no leakage", () => {
+      const misconceptions = [
+        misconception({
+          id: "mc-a",
+          category: "thinks-bigger-is-faster",
+          status: "ACTIVE",
+          metadata: { detections: 2 },
+        }),
+        misconception({
+          id: "mc-b",
+          category: "confuses-cache-and-ram",
+          status: "IMPROVING",
+          metadata: { detections: 5 },
+        }),
+      ];
+      const first = deriveLearningProfile(
+        base({ misconceptions, ...enoughEvidence }),
+      );
+      const second = deriveLearningProfile(
+        base({
+          misconceptions: [...misconceptions].reverse(),
+          ...enoughEvidence,
+        }),
+      );
+      expect(JSON.stringify(first)).toBe(JSON.stringify(second));
+      const s = first.signals.find((x) => x.kind === "recurring-misconception");
+      // Highest detections (mc-b, IMPROVING) wins deterministically.
+      expect(s!.detail.improving).toBe(true);
+    });
+
+    it("never leaks the internal category id or status string into learner-facing text", () => {
+      for (const status of ["ACTIVE", "IMPROVING"] as const) {
+        const p = deriveLearningProfile(
+          base({
+            misconceptions: [misconception({ status })],
+            ...enoughEvidence,
+          }),
+        );
+        const s = p.signals.find((x) => x.kind === "recurring-misconception");
+        expect(s!.summary).not.toMatch(/confuses-cache-and-ram/i);
+        expect(s!.summary).not.toMatch(/\bACTIVE\b|\bIMPROVING\b|\bRESOLVED\b/);
+      }
+    });
+  });
+
   it("names strongest / weakest concept families with >= 2 assessed concepts", () => {
     const p = deriveLearningProfile(
       base({

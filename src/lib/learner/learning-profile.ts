@@ -450,6 +450,12 @@ export function deriveLearningProfile(
   }
 
   // ── 5. recurring misconception ─────────────────────────────────────────
+  // ACTIVE and IMPROVING both surface this signal — resolution (9.1) hasn't
+  // finished either way — but the wording distinguishes them: IMPROVING means
+  // a verified check has already been passed, so the learner hears progress
+  // rather than the same "still tracking it" framing as a not-yet-checked
+  // misconception. `detail.improving` is a plain boolean, not the raw status
+  // string, so nothing beyond that distinction leaks past this signal.
   {
     const recurring = input.misconceptions
       .filter((m) => m.status !== "RESOLVED")
@@ -463,13 +469,17 @@ export function deriveLearningProfile(
       .filter((x) => x.detections >= MISCONCEPTION_RECURRENCE)
       .sort((a, b) => b.detections - a.detections)[0];
     if (recurring) {
+      const improving = recurring.m.status === "IMPROVING";
       signals.push({
         kind: "recurring-misconception",
         detail: {
           category: recurring.m.category,
           detections: recurring.detections,
+          improving,
         },
-        summary: `One specific mix-up keeps coming back — Lumen is tracking it and will keep targeting it.`,
+        summary: improving
+          ? "One specific mix-up is starting to clear — Lumen will check it once more to make sure it sticks."
+          : "One specific mix-up keeps coming back — Lumen is tracking it and will keep targeting it.",
         evidence: {
           evidenceCount: recurring.detections,
           confidence: Math.min(0.95, recurring.m.confidence),

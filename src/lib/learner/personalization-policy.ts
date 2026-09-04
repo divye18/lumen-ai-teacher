@@ -157,9 +157,13 @@ export function personalizeTeaching(
   }
 
   if (active.has("recurring-misconception")) {
+    const improving =
+      active.get("recurring-misconception")!.detail.improving === true;
     notes.set(
       "recurring-misconception",
-      "Still targeting a mix-up that has come back more than once.",
+      improving
+        ? "One more check on a mix-up you're already starting to clear."
+        : "Still targeting a mix-up that has come back more than once.",
     );
   }
 
