@@ -91,3 +91,12 @@ export {
   type MisconceptionSource,
   type MisconceptionDetailView,
 } from "./misconception-view";
+export {
+  deriveVisualIntent,
+  visualIntentLabel,
+  visualModeLabel,
+  type VisualIntent,
+  type VisualComplexity,
+  type VisualIntentContext,
+  type VisualIntentResult,
+} from "./visual-adaptation";

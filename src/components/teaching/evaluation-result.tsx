@@ -56,6 +56,7 @@ export function EvaluationResult({
   beat = 2,
   previousStrategy = null,
   previousAction = null,
+  previousRepresentationLabel = null,
   headline,
 }: {
   result: InteractionResultView;
@@ -65,6 +66,8 @@ export function EvaluationResult({
   beat?: number;
   previousStrategy?: string | null;
   previousAction?: string | null;
+  /** Mode label of the visual currently on screen (for the "Visual" pair). */
+  previousRepresentationLabel?: string | null;
   headline?: string;
 }) {
   const reduce = useReducedMotion();
@@ -211,6 +214,8 @@ export function EvaluationResult({
               decision={result.nextDecision}
               previousStrategy={previousStrategy}
               previousAction={previousAction}
+              representation={result.nextRepresentation}
+              previousRepresentationLabel={previousRepresentationLabel}
             />
           </motion.div>
         ) : null}

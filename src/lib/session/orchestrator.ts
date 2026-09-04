@@ -31,14 +31,18 @@ import {
 } from "@/lib/learner";
 import {
   createTeachingEngine,
+  deriveVisualIntent,
   explainNextStep,
   generateTeachingContent,
   masteryBandLabel,
   nextQuestionKind,
   scoreToPoints,
   titleCase,
+  visualIntentLabel,
+  visualModeLabel,
   type PolicyFacts,
   type ResolvedTeachingDecision,
+  type VisualIntentContext,
 } from "@/lib/teaching";
 import { buildMisconceptionDetail } from "@/lib/teaching/misconception-view";
 import {
@@ -47,7 +51,7 @@ import {
   type RichAnswerEvaluation,
 } from "@/lib/teaching/contracts";
 import { getKnowledgeGraph, graphSignalFromView } from "@/lib/graph";
-import { resolveVisual, visualSignalFromState } from "@/lib/visuals";
+import { resolveVisual } from "@/lib/visuals";
 import {
   pickStructuredQuestion,
   gradeStructuredAnswer,
@@ -129,6 +133,25 @@ const ACTION_TO_INTERACTION_TYPE: Record<string, InteractionType> = {
 };
 
 const QUESTION_ACTIONS = new Set(["ASK", "ASSESS"]);
+
+/** Everything `deriveVisualIntent` needs, straight from the policy facts. */
+function visualIntentContext(
+  facts: PolicyFacts,
+  action: string,
+): VisualIntentContext {
+  return {
+    masteryPoints: facts.masteryPoints,
+    previousMasteryPoints: facts.previousMasteryPoints,
+    repeatedMisconception: facts.repeatedMisconception,
+    lastClassification: facts.lastClassification,
+    incorrectStreak: facts.incorrectStreak,
+    attempts: facts.attempts,
+    action,
+    questionKind: facts.lastQuestionKind,
+    strategy: facts.currentStrategy,
+    conceptImportance: facts.conceptImportance,
+  };
+}
 
 /** Prereq / dependent / sibling concept titles for the structured template generator. */
 function buildTemplateGraphContext(
@@ -1005,21 +1028,19 @@ export function createTeachingOrchestrator(
         currentAction: decision.action,
       });
 
-      // Deterministic visual: no model output touches the renderer.
-      const visualSignal = visualSignalFromState({
-        masteryPoints: facts.masteryPoints,
-        lastClassification: facts.lastClassification,
-        repeatedMisconception: facts.repeatedMisconception,
-        incorrectStreak: facts.incorrectStreak,
-        attempts: facts.attempts,
-      });
+      // Deterministic visual: no model output touches the renderer. The visual
+      // intent names WHY this representation (educational, learner-facing); the
+      // resolver picks the concrete directive from that intent's signal.
+      const visualIntent = deriveVisualIntent(
+        visualIntentContext(facts, decision.action),
+      );
       const resolvedVisual = resolveVisual({
         conceptKey: engineConcept.key,
         title: engineConcept.title,
         summary: content.value.body || engineConcept.summary,
         action: decision.action,
         strategy: decision.strategy,
-        learnerSignal: visualSignal,
+        learnerSignal: visualIntent.signal,
       });
       const showVisual =
         resolvedVisual.source !== "text" || decision.action === "VISUALIZE";
@@ -1036,7 +1057,8 @@ export function createTeachingOrchestrator(
           conceptKey: engineConcept.key,
           groundedInSource: content.value.groundedInSource,
           visual: showVisual ? resolvedVisual.directive : null,
-          visualRationale: showVisual ? resolvedVisual.rationale : null,
+          visualRationale: showVisual ? visualIntent.rationale : null,
+          visualIntent: showVisual ? visualIntent.intent : null,
         },
         question: null,
         citations: src?.citations ?? [],
@@ -1359,6 +1381,43 @@ export function createTeachingOrchestrator(
       });
       await recordDecision(next.data, nextDecision, next.currentConceptId);
 
+      // How Lumen will show this concept next — computed here so the adaptive
+      // moment can say "here's how the picture changes". Only when the next
+      // step actually teaches (not a question, not a jump to a new concept).
+      let nextRepresentation: InteractionResultView["nextRepresentation"] =
+        null;
+      if (
+        !QUESTION_ACTIONS.has(nextDecision.action) &&
+        nextDecision.action !== "MOVE_FORWARD"
+      ) {
+        const nextEngineConcept = buildEngineConcept(
+          next.data.currentConcept,
+          plan.concepts,
+        );
+        const nextVisualIntent = deriveVisualIntent(
+          visualIntentContext(nextFacts, nextDecision.action),
+        );
+        const nextResolved = resolveVisual({
+          conceptKey: nextEngineConcept.key,
+          title: nextEngineConcept.title,
+          summary: nextEngineConcept.summary,
+          action: nextDecision.action,
+          strategy: nextDecision.strategy,
+          learnerSignal: nextVisualIntent.signal,
+        });
+        if (
+          nextResolved.source !== "text" ||
+          nextDecision.action === "VISUALIZE"
+        ) {
+          nextRepresentation = {
+            mode: nextResolved.directive.mode,
+            modeLabel: visualModeLabel(nextResolved.directive.mode),
+            intentLabel: visualIntentLabel(nextVisualIntent.intent),
+            rationale: nextVisualIntent.rationale,
+          };
+        }
+      }
+
       return ok({
         sessionId: data.session.id,
         evaluation: {
@@ -1390,6 +1449,7 @@ export function createTeachingOrchestrator(
           conceptTitle: next.data.currentConcept.title,
           misconceptionDetectionCount: misconceptionDetail?.detectionCount,
         }),
+        nextRepresentation,
         progress: progressOf(
           next.data.session,
           next.data.lessonConcepts,

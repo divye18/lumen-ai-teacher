@@ -26,10 +26,16 @@ import { LumenWordmark } from "@/components/ui/lumen-mark";
 import { ThemeToggle } from "@/components/ui/theme";
 import type { TimelineConcept } from "@/components/learning/session-timeline";
 import type { KnowledgeGraphView } from "@/lib/graph";
+import type { VisualDirective } from "@/lib/visuals";
 import { apiFetch } from "@/lib/ui/api-client";
 import { actionLabel } from "@/lib/ui/learning-presentation";
 import { buildSessionEvents } from "@/lib/ui/session-events";
 import { deriveTeachingStage } from "@/lib/teaching/teaching-stage";
+import {
+  visualIntentLabel,
+  visualModeLabel,
+  type VisualIntent,
+} from "@/lib/teaching/visual-adaptation";
 import { masteryBand } from "@/lib/teaching/mastery";
 import {
   trajectoryFromResults,
@@ -115,6 +121,15 @@ export function TeachingRoom({
   const [teachingRevealed, setTeachingRevealed] = useState(false);
   /** Which beat of the post-answer sequence is showing (0..2). */
   const [resultBeat, setResultBeat] = useState(0);
+  /**
+   * The representation from the most recent teaching step. Held through the
+   * question + result phases so the change to the next representation is a
+   * visible cross-fade rather than an off-screen swap.
+   */
+  const [heldVisual, setHeldVisual] = useState<{
+    directive: VisualDirective;
+    intent: string | null;
+  } | null>(null);
   const [answerLog, setAnswerLog] = useState<AnswerLogEntry[]>([]);
   const [graphState, setGraphState] = useState<KnowledgeGraphView | null>(
     graph,
@@ -212,6 +227,12 @@ export function TeachingRoom({
       return;
     }
     if (s.content) {
+      if (s.content.visual) {
+        setHeldVisual({
+          directive: s.content.visual,
+          intent: s.content.visualIntent,
+        });
+      }
       setPhase("teaching");
       return;
     }
@@ -219,6 +240,9 @@ export function TeachingRoom({
       setPhase("question");
       return;
     }
+    // A MOVE_FORWARD step has no content/question — drop the old concept's
+    // visual so it doesn't linger into the next concept.
+    setHeldVisual(null);
     await refreshSession();
     setPhase("loading");
     setAutoAdvanceTick((t) => t + 1);
@@ -409,7 +433,17 @@ export function TeachingRoom({
   });
   const presence = teachingStage.presence;
 
-  const visual = phase === "teaching" ? (step?.content?.visual ?? null) : null;
+  // The representation stays on screen across teaching → question → result, so
+  // the switch to the next representation is a cross-fade the learner watches.
+  const activeVisual = heldVisual?.directive ?? null;
+  const visualMuted = phase !== "teaching";
+  const visualIntentText =
+    phase === "teaching"
+      ? (step?.content?.visualIntent ?? heldVisual?.intent ?? null)
+      : (heldVisual?.intent ?? null);
+  const previousRepresentationLabel = heldVisual
+    ? visualModeLabel(heldVisual.directive.mode)
+    : null;
   const masteryPct = Math.round(panelSnapshot.masteryPoints);
 
   // The "why this next?" explanation for the step currently on screen.
@@ -471,11 +505,22 @@ export function TeachingRoom({
 
         {/* Centre: visual canvas + teaching panel */}
         <main className="min-w-0 space-y-5">
-          {visual ? (
+          {activeVisual &&
+          (phase === "teaching" ||
+            phase === "question" ||
+            phase === "result") ? (
             <div className="space-y-1.5">
-              <VisualCanvas directive={visual} />
+              <VisualCanvas
+                directive={activeVisual}
+                intentLabel={
+                  visualIntentText
+                    ? visualIntentLabel(visualIntentText as VisualIntent)
+                    : null
+                }
+                muted={visualMuted}
+              />
               {phase === "teaching" && step?.content?.visualRationale ? (
-                <p className="px-1 text-[11px] leading-snug text-[var(--color-ink-faint)]">
+                <p className="px-1 text-[11px] leading-snug text-[var(--color-accent)]">
                   {step.content.visualRationale}
                 </p>
               ) : null}
@@ -596,6 +641,7 @@ export function TeachingRoom({
                     beat={effectiveBeat}
                     previousStrategy={previousDecision?.strategy ?? null}
                     previousAction={previousDecision?.action ?? null}
+                    previousRepresentationLabel={previousRepresentationLabel}
                     headline={transitionHeadline(result)}
                   />
                   {effectiveBeat >= 1 &&

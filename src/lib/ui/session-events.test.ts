@@ -52,6 +52,7 @@ function result(
       ...over,
     },
     nextDecision: decision(),
+    nextRepresentation: null,
     progress: {
       conceptIndex: 0,
       conceptCount: 2,

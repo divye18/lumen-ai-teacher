@@ -2,7 +2,7 @@
 
 import { motion, useReducedMotion } from "framer-motion";
 
-import type { DecisionView } from "@/lib/session/views";
+import type { DecisionView, NextRepresentationView } from "@/lib/session/views";
 import { actionLabel } from "@/lib/ui/learning-presentation";
 
 const STRATEGY_LABEL: Record<string, string> = {
@@ -29,12 +29,18 @@ export function AdaptiveTransition({
   decision,
   previousStrategy,
   previousAction,
+  representation = null,
+  previousRepresentationLabel = null,
   onDone,
 }: {
   headline: string;
   decision: DecisionView;
   previousStrategy?: string | null;
   previousAction?: string | null;
+  /** How Lumen will show the concept on the next teaching step. */
+  representation?: NextRepresentationView | null;
+  /** The representation currently on screen (its mode label). */
+  previousRepresentationLabel?: string | null;
   onDone?: () => void;
 }) {
   const reduce = useReducedMotion();
@@ -44,9 +50,13 @@ export function AdaptiveTransition({
   const fromLabel = previousAction ? actionLabel(previousAction) : null;
   const toLabel = actionLabel(decision.action);
   const approachChanged = fromLabel != null && fromLabel !== toLabel;
-  // Always show something: the approach pair when it moved, otherwise fall back
-  // to the representation pair, otherwise nothing.
   const showApproach = approachChanged;
+
+  const visualChanged =
+    representation != null &&
+    previousRepresentationLabel != null &&
+    previousRepresentationLabel !== representation.modeLabel;
+  const anyPair = showApproach || strategyChanged || visualChanged;
 
   return (
     <motion.div
@@ -65,7 +75,7 @@ export function AdaptiveTransition({
         {headline}
       </p>
 
-      {showApproach || strategyChanged ? (
+      {anyPair ? (
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           {showApproach ? (
             <TransitionPair
@@ -77,9 +87,17 @@ export function AdaptiveTransition({
           ) : null}
           {strategyChanged ? (
             <TransitionPair
-              caption="Representation"
+              caption="Teaching style"
               from={strategyLabel(previousStrategy)}
               to={strategyLabel(decision.strategy)}
+              reduce={reduce}
+            />
+          ) : null}
+          {visualChanged ? (
+            <TransitionPair
+              caption="Visual"
+              from={previousRepresentationLabel as string}
+              to={representation.modeLabel}
               reduce={reduce}
             />
           ) : null}
@@ -92,8 +110,14 @@ export function AdaptiveTransition({
         </p>
       )}
 
+      {visualChanged ? (
+        <p className="mt-3 text-[12px] leading-relaxed text-[var(--color-accent)]">
+          {representation.rationale}
+        </p>
+      ) : null}
+
       {decision.whyThisNext ? (
-        <p className="mt-4 text-[12px] leading-relaxed text-[var(--color-ink-muted)]">
+        <p className="mt-3 text-[12px] leading-relaxed text-[var(--color-ink-muted)]">
           {decision.whyThisNext.reason}
         </p>
       ) : decision.adaptationNarrative.length > 0 ? (

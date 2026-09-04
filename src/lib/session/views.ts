@@ -117,8 +117,14 @@ export interface TeachingContentView {
    * a picture would not add anything.
    */
   visual: VisualDirective | null;
-  /** One learner-safe sentence on why this visual (for the signal panel). */
+  /** One learner-safe sentence on why this representation was chosen. */
   visualRationale: string | null;
+  /**
+   * The educational intent of the representation — `concrete` | `reframe` |
+   * `reinforce` | `connect` | `systemView`. Lets the UI label the visual by
+   * what it's *for* ("Simpler view", "System view") rather than its raw mode.
+   */
+  visualIntent: string | null;
 }
 
 export interface TeachingStepView {
@@ -175,11 +181,29 @@ export interface LearnerUpdateView {
   repeatedMisconception: boolean;
 }
 
+/**
+ * The representation Lumen will use on the next teaching step, computed at
+ * answer time so the adaptive moment can say "here's how the picture changes".
+ * Deterministic; never invents content.
+ */
+export interface NextRepresentationView {
+  /** VisualMode of the incoming teaching visual. */
+  mode: string;
+  /** Readable mode name, e.g. "3D model", "Step-by-step diagram". */
+  modeLabel: string;
+  /** What the representation is *for*, e.g. "Simpler view", "System view". */
+  intentLabel: string;
+  /** Learner-facing educational reason for this representation. */
+  rationale: string;
+}
+
 export interface InteractionResultView {
   sessionId: string;
   evaluation: EvaluationView;
   learnerUpdate: LearnerUpdateView;
   nextDecision: DecisionView;
+  /** How Lumen will show this concept next (null when the next step has no visual). */
+  nextRepresentation: NextRepresentationView | null;
   progress: SessionProgress;
   sessionStatus: string;
 }
