@@ -5,6 +5,7 @@ import Link from "next/link";
 import { motion, useReducedMotion } from "framer-motion";
 
 import { LearningSignalCard } from "@/components/learning/learning-signal-card";
+import { LumenLearningSignal } from "@/components/learning/lumen-learning-signal";
 import { WhyNextCard } from "@/components/learning/why-next-card";
 import { TeachingRoomMap } from "@/components/graph/teaching-room-map";
 import { EvaluationResult } from "@/components/teaching/evaluation-result";
@@ -45,6 +46,7 @@ import {
 import { MasteryTrajectoryChart } from "@/components/learning/mastery-trajectory";
 import type {
   InteractionResultView,
+  LiveStatusView,
   SessionView,
   TeachingStepView,
 } from "@/lib/session/views";
@@ -455,6 +457,19 @@ export function TeachingRoom({
     : null;
   const masteryPct = Math.round(panelSnapshot.masteryPoints);
 
+  // 7.4 — the very compact live status + the learning event, from the
+  // deterministic learning-intelligence layer.
+  const liveStatus =
+    phase === "result"
+      ? (result?.liveStatus ?? null)
+      : (step?.liveStatus ?? null);
+  const learningEvent =
+    phase === "result" ? (result?.learningEvent ?? null) : null;
+  const presenceLine =
+    learningEvent && effectiveBeat >= 2
+      ? learningEvent.presenceLine
+      : teachingStage.statusLine;
+
   // The "why this next?" explanation for the step currently on screen.
   const stepWhyNext =
     (phase === "teaching" || phase === "question") && step
@@ -480,6 +495,7 @@ export function TeachingRoom({
         elapsedSec={elapsedSec}
         timeRemaining={timeRemaining}
         presenceLabel={presenceStatusLabel(presence, phase)}
+        liveStatus={liveStatus}
         voiceEnabled={voiceEnabled}
         voiceSupported={voice.capabilities.anyVoice}
         onToggleVoice={() => {
@@ -498,7 +514,7 @@ export function TeachingRoom({
               className="mt-3 text-center text-[11px] leading-snug text-[var(--color-ink-muted)]"
               aria-live="polite"
             >
-              {teachingStage.statusLine}
+              {presenceLine}
             </p>
           </div>
           {voiceEnabled && voice.capabilities.anyVoice ? (
@@ -662,6 +678,12 @@ export function TeachingRoom({
                     previousRepresentationLabel={previousRepresentationLabel}
                     headline={transitionHeadline(result)}
                   />
+                  {learningEvent && effectiveBeat >= 1 ? (
+                    <LumenLearningSignal
+                      event={learningEvent}
+                      className="mt-5"
+                    />
+                  ) : null}
                   {effectiveBeat >= 1 &&
                   currentTrajectory &&
                   currentTrajectory.points.length >= 2 ? (
@@ -791,6 +813,7 @@ function TeachingTopBar({
   elapsedSec,
   timeRemaining,
   presenceLabel,
+  liveStatus,
   voiceEnabled,
   voiceSupported,
   onToggleVoice,
@@ -801,6 +824,7 @@ function TeachingTopBar({
   elapsedSec: number;
   timeRemaining: number | null;
   presenceLabel: string;
+  liveStatus: LiveStatusView | null;
   voiceEnabled: boolean;
   voiceSupported: boolean;
   onToggleVoice: () => void;
@@ -822,6 +846,27 @@ function TeachingTopBar({
         {conceptLabel ? (
           <span className="hidden text-[12px] text-[var(--color-ink-muted)] sm:inline">
             {conceptLabel}
+          </span>
+        ) : null}
+
+        {liveStatus && liveStatus.state !== "FORMING" ? (
+          <span className="hidden items-center gap-1.5 text-[11px] text-[var(--color-ink-faint)] lg:flex">
+            <span className="h-1 w-1 rounded-full bg-[var(--color-accent)]" />
+            <span className="font-medium text-[var(--color-ink-muted)]">
+              {liveStatus.state}
+            </span>
+            <span aria-hidden>
+              {liveStatus.momentum === "up"
+                ? "↑"
+                : liveStatus.momentum === "down"
+                  ? "↓"
+                  : "→"}
+            </span>
+            {liveStatus.nextKind ? (
+              <span className="text-[var(--color-ink-faint)]">
+                · next {liveStatus.nextKind.toLowerCase()}
+              </span>
+            ) : null}
           </span>
         ) : null}
 

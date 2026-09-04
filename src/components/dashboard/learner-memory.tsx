@@ -11,10 +11,25 @@ import { LumenMark } from "@/components/ui/lumen-mark";
  */
 export function LearnerMemory({
   memory,
+  intelligenceInsight = null,
 }: {
   memory: LearnerMemoryView | null;
+  /** 7.4 — one compact real-time-intelligence trajectory line. */
+  intelligenceInsight?: string | null;
 }) {
-  if (!memory || memory.signals.length === 0) return null;
+  const hasSignals = Boolean(memory && memory.signals.length > 0);
+  if (!hasSignals && !intelligenceInsight) return null;
+
+  if (!memory || !hasSignals) {
+    return (
+      <Panel inset>
+        <SectionHeading title="What Lumen has learned about how you learn" />
+        <p className="mt-4 text-[13px] leading-relaxed text-[var(--color-ink)]">
+          {intelligenceInsight}
+        </p>
+      </Panel>
+    );
+  }
 
   return (
     <Panel inset>
@@ -22,6 +37,11 @@ export function LearnerMemory({
         title="What Lumen has learned about how you learn"
         hint={`From your last ${memory.computedFrom} answers — carried across sessions`}
       />
+      {intelligenceInsight ? (
+        <p className="mt-4 text-[13px] leading-relaxed font-medium text-[var(--color-ink)]">
+          {intelligenceInsight}
+        </p>
+      ) : null}
       <ul className="mt-5 space-y-3">
         {memory.signals.map((s) => (
           <li key={s.text} className="flex gap-3">

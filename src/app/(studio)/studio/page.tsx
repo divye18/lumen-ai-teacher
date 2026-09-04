@@ -64,7 +64,10 @@ export default async function StudioPage() {
 
       <LearningLens observations={overview.observations} />
 
-      <LearnerMemory memory={overview.learnerMemory} />
+      <LearnerMemory
+        memory={overview.learnerMemory}
+        intelligenceInsight={overview.intelligenceInsight}
+      />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <MisconceptionRadar misconceptions={overview.misconceptions} />

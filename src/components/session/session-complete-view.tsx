@@ -203,6 +203,47 @@ export function SessionCompleteView({ report }: { report: SessionReport }) {
         </Panel>
       ) : null}
 
+      {report.learningEvents.length > 0 ? (
+        <Panel inset>
+          <div className="flex items-center gap-2">
+            <LumenMark className="size-4 text-[var(--color-accent)]" />
+            <p className="text-[11px] font-medium tracking-wide text-[var(--color-ink-faint)] uppercase">
+              Learning signals this session
+            </p>
+          </div>
+          <ul className="mt-4 flex flex-col gap-3">
+            {report.learningEvents.map((e) => (
+              <li key={e.kind + e.conceptTitle} className="flex gap-2.5">
+                <span
+                  aria-hidden
+                  className={
+                    e.kind === "READY_TO_ADVANCE"
+                      ? "mt-0.5 text-[var(--color-accent)]"
+                      : e.kind === "PATTERN_CONFIRMED" ||
+                          e.kind === "DIFFICULTY_MISMATCH"
+                        ? "mt-0.5 text-[var(--color-ink-faint)]"
+                        : "mt-0.5 text-[var(--color-positive)]"
+                  }
+                >
+                  {e.kind === "READY_TO_ADVANCE" ? "→" : "✓"}
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[13px] leading-relaxed text-[var(--color-ink)]">
+                    <span className="font-medium">{e.conceptTitle}</span> —{" "}
+                    {e.summary}
+                  </p>
+                  {e.next ? (
+                    <p className="mt-0.5 text-[11px] text-[var(--color-ink-faint)]">
+                      {e.next}
+                    </p>
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      ) : null}
+
       {report.graph.nodes.length > 1 ? (
         <KnowledgeGraphPanel
           graph={report.graph}

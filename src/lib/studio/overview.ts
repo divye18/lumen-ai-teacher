@@ -98,6 +98,8 @@ export interface StudioOverview {
   observations: Observation[];
   /** "What Lumen has learned about how you learn" — adaptive teacher memory. */
   learnerMemory: LearnerMemoryView | null;
+  /** 7.4 — one compact real-time-learning-intelligence line, or null. */
+  intelligenceInsight: string | null;
 }
 
 export interface LearnerMemoryView {
@@ -350,6 +352,35 @@ export async function getStudioOverview(
         }
       : null;
 
+  // 7.4 — ONE compact real-time-intelligence trajectory line, derived from the
+  // SAME profile (not a second insight set). Only when evidence supports it.
+  const signalKinds = new Set(learningProfile.signals.map((s) => s.kind));
+  const momentumSignal = learningProfile.signals.find(
+    (s) => s.kind === "learning-momentum",
+  );
+  let intelligenceInsight: string | null = null;
+  if (
+    learningProfile.sampleSize >= 6 &&
+    (signalKinds.has("example-recovery") ||
+      signalKinds.has("simplification-recovery"))
+  ) {
+    intelligenceInsight = "You're recovering faster from mistakes.";
+  } else if (
+    signalKinds.has("application-ahead-of-recall") ||
+    (momentumSignal && momentumSignal.detail.direction === "improving")
+  ) {
+    intelligenceInsight = "Your application reasoning is getting stronger.";
+  } else if (
+    learningProfile.signals.some(
+      (s) =>
+        s.kind === "performance-consistency" &&
+        s.detail.stdDev != null &&
+        Number(s.detail.stdDev) <= 0.18,
+    )
+  ) {
+    intelligenceInsight = "You're becoming more consistent.";
+  }
+
   const recommendation = buildRecommendation({
     activeSession,
     concepts,
@@ -391,5 +422,6 @@ export async function getStudioOverview(
     graph,
     observations,
     learnerMemory,
+    intelligenceInsight,
   };
 }

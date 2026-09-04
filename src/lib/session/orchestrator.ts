@@ -68,10 +68,23 @@ import {
 import {
   buildEngineConcept,
   buildEngineSignal,
+  buildIntelligenceInput,
   buildPolicyFacts,
   currentStrategy,
   type SessionContextData,
 } from "./context";
+import {
+  deriveLearningEvent,
+  deriveLearningIntelligence,
+  isInterventionAction,
+  repeatedMisconceptionCount,
+  type EventSnapshot,
+} from "./learning-intelligence";
+import {
+  toIntelligenceView,
+  toLearningEventView,
+  toLiveStatusView,
+} from "./intelligence-views";
 import {
   buildSourceContextText,
   toTeachingCitations,
@@ -294,6 +307,8 @@ export function createTeachingOrchestrator(
         Math.round(data.timeElapsedMinutes),
       ),
       sessionStatus: "COMPLETED",
+      intelligence: null,
+      liveStatus: null,
     };
   }
 
@@ -722,6 +737,22 @@ export function createTeachingOrchestrator(
       }
 
       const facts = buildPolicyFacts(data);
+
+      // 7.4 — descriptive read of the current learning state. Pure, from the
+      // context already loaded. Never decides the action.
+      const intelligence = deriveLearningIntelligence(
+        buildIntelligenceInput(data, {
+          masteryPoints: facts.masteryPoints,
+          previousMasteryPoints: facts.previousMasteryPoints,
+          confidence: facts.confidence,
+          previousConfidence: null,
+          formatWeakness: personalization.targetFormatWeakness,
+        }),
+      );
+      const intelligenceView = toIntelligenceView(intelligence);
+      const liveStatusFor = (nextKind: string | null) =>
+        toLiveStatusView(intelligence, nextKind);
+
       const maxDetections = Math.max(
         0,
         ...data.misconceptions.map(
@@ -793,6 +824,8 @@ export function createTeachingOrchestrator(
             Math.round(data.timeElapsedMinutes),
           ),
           sessionStatus: done ? "COMPLETED" : "ACTIVE",
+          intelligence: null,
+          liveStatus: null,
         });
       };
 
@@ -961,6 +994,8 @@ export function createTeachingOrchestrator(
               Math.round(data.timeElapsedMinutes),
             ),
             sessionStatus: "ACTIVE",
+            intelligence: intelligenceView,
+            liveStatus: liveStatusFor(sq.kind),
           });
         }
 
@@ -1043,6 +1078,8 @@ export function createTeachingOrchestrator(
             Math.round(data.timeElapsedMinutes),
           ),
           sessionStatus: "ACTIVE",
+          intelligence: intelligenceView,
+          liveStatus: liveStatusFor(q.kind),
         });
       }
 
@@ -1149,6 +1186,8 @@ export function createTeachingOrchestrator(
           Math.round(data.timeElapsedMinutes),
         ),
         sessionStatus: "ACTIVE",
+        intelligence: intelligenceView,
+        liveStatus: liveStatusFor(null),
       });
     },
 
@@ -1466,6 +1505,63 @@ export function createTeachingOrchestrator(
       });
       await recordDecision(next.data, nextDecision, next.currentConceptId);
 
+      // ── 7.4 real-time learning intelligence ────────────────────────
+      // Compare the learning state before and after this answer and emit at
+      // most one meaningful educational event. Pure, from state already loaded.
+      const sameConcept =
+        concept.concept_key === data.currentConcept.concept_key &&
+        next.data.currentConcept.concept_key === concept.concept_key;
+
+      let intelligenceView: InteractionResultView["intelligence"] = null;
+      let learningEventView: InteractionResultView["learningEvent"] = null;
+      let resultLiveStatus: InteractionResultView["liveStatus"] = null;
+
+      if (sameConcept) {
+        const beforeIntel = deriveLearningIntelligence(
+          buildIntelligenceInput(data, {
+            masteryPoints: outcome.delta.masteryBefore,
+            previousMasteryPoints: data.previousMasteryPoints,
+            confidence: outcome.delta.confidenceBefore,
+            previousConfidence: null,
+            formatWeakness: personalization.targetFormatWeakness,
+          }),
+        );
+        const afterIntel = deriveLearningIntelligence(
+          buildIntelligenceInput(next.data, {
+            masteryPoints: outcome.delta.masteryAfter,
+            previousMasteryPoints: outcome.delta.masteryBefore,
+            confidence: outcome.delta.confidenceAfter,
+            previousConfidence: outcome.delta.confidenceBefore,
+            formatWeakness: personalization.targetFormatWeakness,
+          }),
+        );
+        const lastBefore = [...data.recentAnswers].sort((a, b) =>
+          a.created_at < b.created_at ? -1 : 1,
+        )[data.recentAnswers.length - 1];
+        const before: EventSnapshot = {
+          intelligence: beforeIntel,
+          repeatedMisconceptionCount: repeatedMisconceptionCount(
+            data.misconceptions,
+          ),
+          interventionSinceBefore: false,
+          lastClassification: lastBefore?.classification ?? null,
+        };
+        const after: EventSnapshot = {
+          intelligence: afterIntel,
+          repeatedMisconceptionCount: repeatedMisconceptionCount(
+            next.data.misconceptions,
+          ),
+          interventionSinceBefore: isInterventionAction(
+            data.session.current_action,
+          ),
+          lastClassification: evaluation.classification,
+        };
+        intelligenceView = toIntelligenceView(afterIntel);
+        const event = deriveLearningEvent(before, after);
+        learningEventView = event ? toLearningEventView(event) : null;
+        resultLiveStatus = toLiveStatusView(afterIntel, null);
+      }
+
       // How Lumen will show this concept next — computed here so the adaptive
       // moment can say "here's how the picture changes". Only when the next
       // step actually teaches (not a question, not a jump to a new concept).
@@ -1546,6 +1642,9 @@ export function createTeachingOrchestrator(
           Math.round(next.data.timeElapsedMinutes),
         ),
         sessionStatus: next.data.session.status,
+        intelligence: intelligenceView,
+        learningEvent: learningEventView,
+        liveStatus: resultLiveStatus,
       });
     },
   };

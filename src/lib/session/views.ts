@@ -134,6 +134,60 @@ export interface TeachingContentView {
   visualIntent: string | null;
 }
 
+/**
+ * REAL-TIME LEARNING INTELLIGENCE (7.4) — the client-safe read of what is
+ * happening in the learner's learning right now. Descriptive only; the teaching
+ * policy still owns the action. No internal reasoning, no taxonomy ids.
+ */
+export interface LearningIntelligenceView {
+  conceptKey: string;
+  conceptTitle: string;
+  masteryPoints: number;
+  masteryDirection: "rising" | "steady" | "falling" | "unknown";
+  confidenceDirection: "rising" | "steady" | "falling" | "unknown";
+  recentAccuracy: number | null;
+  recoveryVelocity: "QUICK" | "RECOVERING" | "SLOW" | "PERSISTENT" | null;
+  misconceptionRisk: "none" | "low" | "elevated" | "high";
+  conceptStability: "volatile" | "settling" | "stable" | "unknown";
+  momentum: "accelerating" | "steady" | "slowing" | "unknown";
+  difficultyFit: "too-easy" | "on-target" | "too-hard" | "unknown";
+  readiness: "NOT_READY" | "DEVELOPING" | "READY" | "MASTERED";
+  readinessRationale: string;
+  readyToAdvance: boolean;
+  nextConceptTitle: string | null;
+  hasEvidence: boolean;
+}
+
+/** One meaningful educational change, surfaced to the learner. */
+export interface LearningEventView {
+  kind:
+    | "RECOVERY_DETECTED"
+    | "PATTERN_CONFIRMED"
+    | "DIFFICULTY_MISMATCH"
+    | "READY_TO_ADVANCE"
+    | "MASTERY_STABILIZED";
+  headline: string;
+  summary: string;
+  conceptTitle: string;
+  masteryFrom: number;
+  masteryTo: number;
+  next: string | null;
+  /** Presence line for the teacher orb to react with. */
+  presenceLine: string;
+}
+
+/** The very compact live status in the Teaching Room header. */
+export interface LiveStatusView {
+  conceptTitle: string;
+  masteryPoints: number;
+  /** RECOVERING / DEVELOPING / READY / … — the current teaching-relevant state. */
+  state: string;
+  /** ↑ / → / ↓ */
+  momentum: "up" | "flat" | "down";
+  /** The kind of the next check, when known (e.g. "APPLICATION"). */
+  nextKind: string | null;
+}
+
 export interface TeachingStepView {
   sessionId: string;
   decision: DecisionView;
@@ -142,6 +196,9 @@ export interface TeachingStepView {
   citations: TeachingCitation[];
   progress: SessionProgress;
   sessionStatus: string;
+  /** 7.4 — descriptive read of the current learning state. */
+  intelligence: LearningIntelligenceView | null;
+  liveStatus: LiveStatusView | null;
 }
 
 export interface EvaluationView {
@@ -213,4 +270,9 @@ export interface InteractionResultView {
   nextRepresentation: NextRepresentationView | null;
   progress: SessionProgress;
   sessionStatus: string;
+  /** 7.4 — descriptive read of the learning state after this answer. */
+  intelligence: LearningIntelligenceView | null;
+  /** 7.4 — a meaningful educational change, when one occurred. */
+  learningEvent: LearningEventView | null;
+  liveStatus: LiveStatusView | null;
 }

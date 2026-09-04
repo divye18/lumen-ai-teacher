@@ -21,6 +21,7 @@ import type {
   EngineConceptContext,
   EngineSignalContext,
 } from "@/lib/teaching/prompts";
+import type { LearningIntelligenceInput } from "./learning-intelligence";
 
 const DEFAULT_STRATEGY: TeachingStyle = "conversational";
 
@@ -214,6 +215,41 @@ export function buildPolicyFacts(data: SessionContextData): PolicyFacts {
       data.graphSignal?.currentConceptIsLoadBearing ?? false,
     weakUpstreamPrerequisite:
       data.graphSignal?.weakUpstreamPrerequisite ?? null,
+  };
+}
+
+/**
+ * Assemble the evidence bundle for `deriveLearningIntelligence` (7.4) from a
+ * loaded session context. Everything here is already persisted state — no new
+ * queries. `recentAnswers` / `recentQuestions` are already current-concept
+ * scoped by `loadContext`.
+ */
+export function buildIntelligenceInput(
+  data: SessionContextData,
+  opts: {
+    masteryPoints: number;
+    previousMasteryPoints: number | null;
+    confidence: number;
+    previousConfidence: number | null;
+    formatWeakness?: string | null;
+  },
+): LearningIntelligenceInput {
+  return {
+    concept: {
+      key: data.currentConcept.concept_key,
+      title: data.currentConcept.title,
+    },
+    masteryPoints: opts.masteryPoints,
+    previousMasteryPoints: opts.previousMasteryPoints,
+    confidence: opts.confidence,
+    previousConfidence: opts.previousConfidence,
+    currentAction: data.session.current_action,
+    answers: data.recentAnswers,
+    questions: data.recentQuestions,
+    interactions: data.sessionInteractions,
+    misconceptions: data.misconceptions.filter((m) => m.status !== "RESOLVED"),
+    formatWeakness: opts.formatWeakness ?? null,
+    graph: data.graphView ?? null,
   };
 }
 

@@ -14,6 +14,9 @@ import {
 import { masteryBandLabel, scoreToPoints } from "@/lib/teaching/mastery";
 import { buildStrategyMemory, deriveLearningProfile } from "@/lib/learner";
 import { getKnowledgeGraph, type KnowledgeGraphView } from "@/lib/graph";
+import { deriveSessionEvents } from "@/lib/session/learning-intelligence";
+import { toLearningEventView } from "@/lib/session/intelligence-views";
+import type { LearningEventView } from "@/lib/session/views";
 import { SessionNotFoundError } from "@/lib/errors";
 import { err, ok, type Result } from "@/lib/result";
 
@@ -66,6 +69,11 @@ export interface SessionReport {
    * signal refreshed by this session's evidence. `null` when evidence is thin.
    */
   personalizationInsight: string | null;
+  /**
+   * 7.4 — the real-time learning-intelligence events from THIS session's
+   * evidence. The same vocabulary the Teaching Room showed live.
+   */
+  learningEvents: LearningEventView[];
   /** Graph-aware recommended next concept. */
   nextBestMove: {
     title: string;
@@ -278,6 +286,19 @@ export async function getSessionReport(
       (a, b) => b.evidence.confidence - a.evidence.confidence,
     )[0]?.summary ?? null;
 
+  const learningEvents = deriveSessionEvents({
+    concepts: outcomes.map((o) => ({
+      key: o.key,
+      title: o.title,
+      masteryStart: o.masteryBefore,
+      masteryEnd: o.masteryAfter,
+    })),
+    answers,
+    questions,
+    interactions: sessionInteractions,
+    graph,
+  }).map(toLearningEventView);
+
   const masteryGained = outcomes
     .filter((o) => o.delta > 0)
     .reduce((s, o) => s + o.delta, 0);
@@ -355,6 +376,7 @@ export async function getSessionReport(
     recommendation,
     masteryGained: Math.round(masteryGained),
     conceptsReinforced,
+    learningEvents,
     learningPattern,
     personalizationInsight,
     nextBestMove,

@@ -54,6 +54,9 @@ function result(
     },
     nextDecision: decision(),
     nextRepresentation: null,
+    intelligence: null,
+    learningEvent: null,
+    liveStatus: null,
     progress: {
       conceptIndex: 0,
       conceptCount: 2,

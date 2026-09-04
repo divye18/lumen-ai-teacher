@@ -17,4 +17,27 @@ export {
   buildSourceContextText,
   type TeachingCitation,
 } from "./citations";
+export {
+  deriveLearningIntelligence,
+  deriveLearningEvent,
+  deriveRecoveryVelocity,
+  deriveConceptReadiness,
+  deriveNextConcept,
+  deriveSessionEvents,
+  eventPresenceLine,
+  isInterventionAction,
+  repeatedMisconceptionCount,
+  type LearningIntelligence,
+  type LearningIntelligenceInput,
+  type LearningEvent,
+  type LearningEventKind,
+  type EventSnapshot,
+  type RecoveryVelocity,
+  type ConceptReadiness,
+} from "./learning-intelligence";
+export {
+  toIntelligenceView,
+  toLearningEventView,
+  toLiveStatusView,
+} from "./intelligence-views";
 export type * from "./views";
