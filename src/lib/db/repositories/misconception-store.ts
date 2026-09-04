@@ -28,12 +28,21 @@ export interface MisconceptionStore {
     userId: string,
     conceptId: string,
   ): Promise<Result<MisconceptionRow[]>>;
+  /**
+   * `metadataPatch`, when given, is merged into the existing `metadata`
+   * jsonb (never replaces it) — used by the misconception resolution loop to
+   * stamp `clearedChecks`/`lastVerifiedQuestionId` alongside the status.
+   */
   updateStatus(
     id: string,
     status: MisconceptionStatus,
+    metadataPatch?: Record<string, unknown>,
   ): Promise<Result<MisconceptionRow>>;
   /** Convenience: mark RESOLVED and stamp resolved_at. */
-  resolve(id: string): Promise<Result<MisconceptionRow>>;
+  resolve(
+    id: string,
+    metadataPatch?: Record<string, unknown>,
+  ): Promise<Result<MisconceptionRow>>;
   /** Reinforce an existing misconception with fresh evidence. */
   strengthen(
     input: StrengthenMisconceptionInput,
@@ -44,15 +53,41 @@ export function createMisconceptionStore(db: DbClient): MisconceptionStore {
   async function setStatus(
     id: string,
     status: MisconceptionStatus,
+    metadataPatch?: Record<string, unknown>,
   ): Promise<Result<MisconceptionRow>> {
-    const parsed = parseInput(updateMisconceptionStatusSchema, { id, status });
+    const parsed = parseInput(updateMisconceptionStatusSchema, {
+      id,
+      status,
+      metadataPatch,
+    });
     if (!parsed.ok) return parsed;
+
+    let metadata: Json | undefined;
+    if (parsed.value.metadataPatch) {
+      const existing = await db
+        .from("misconceptions")
+        .select("metadata")
+        .eq("id", parsed.value.id)
+        .maybeSingle();
+      if (existing.error) return err(fromPostgrestError(existing.error));
+      if (!existing.data) {
+        return err(
+          new LumenError("NOT_FOUND", `Misconception ${id} not found.`, {
+            recoverable: true,
+          }),
+        );
+      }
+      const currentMeta =
+        (existing.data.metadata as Record<string, unknown> | null) ?? {};
+      metadata = { ...currentMeta, ...parsed.value.metadataPatch } as Json;
+    }
 
     const patch: TablesUpdate<"misconceptions"> = {
       status: parsed.value.status,
       last_detected_at: new Date().toISOString(),
       resolved_at:
         parsed.value.status === "RESOLVED" ? new Date().toISOString() : null,
+      ...(metadata !== undefined ? { metadata } : {}),
     };
 
     const res = await db
@@ -119,8 +154,8 @@ export function createMisconceptionStore(db: DbClient): MisconceptionStore {
 
     updateStatus: setStatus,
 
-    resolve(id) {
-      return setStatus(id, "RESOLVED");
+    resolve(id, metadataPatch) {
+      return setStatus(id, "RESOLVED", metadataPatch);
     },
 
     async strengthen(input) {

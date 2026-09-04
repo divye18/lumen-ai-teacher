@@ -136,6 +136,8 @@ export type RecordMisconceptionInput = z.infer<
 export const updateMisconceptionStatusSchema = z.object({
   id: uuidSchema,
   status: misconceptionStatusSchema,
+  /** Merged into the existing `metadata` jsonb — never replaces it. */
+  metadataPatch: metadataSchema.optional(),
 });
 
 export const strengthenMisconceptionSchema = z.object({

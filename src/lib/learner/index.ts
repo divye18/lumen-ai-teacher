@@ -96,3 +96,14 @@ export {
   type ExistingMisconception,
   type MisconceptionUpdatePlan,
 } from "./misconception-tracker";
+export {
+  misconceptionCategoriesInQuestion,
+  classifyMisconceptionResponse,
+  planMisconceptionResolution,
+  evaluateMisconceptionResolution,
+  type MisconceptionEvidenceSignal,
+  type ResolvableStatus,
+  type ResolvableMisconceptionState,
+  type MisconceptionResolutionTransition,
+  type ResolutionOutcome,
+} from "./misconception-resolution";

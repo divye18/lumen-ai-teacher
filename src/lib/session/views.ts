@@ -165,7 +165,9 @@ export interface LearningEventView {
     | "PATTERN_CONFIRMED"
     | "DIFFICULTY_MISMATCH"
     | "READY_TO_ADVANCE"
-    | "MASTERY_STABILIZED";
+    | "MASTERY_STABILIZED"
+    | "MISCONCEPTION_IMPROVING"
+    | "MISCONCEPTION_CLEARED";
   headline: string;
   summary: string;
   conceptTitle: string;

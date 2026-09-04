@@ -27,8 +27,11 @@ import { evaluateAnswer } from "@/lib/assessment/evaluator";
 import {
   applyInteractionOutcome,
   normalizeCategory,
+  evaluateMisconceptionResolution,
+  misconceptionCategoriesInQuestion,
   type ExistingMisconception,
   type PersonalizationAdjustments,
+  type ResolutionOutcome,
 } from "@/lib/learner";
 import {
   loadPersonalization,
@@ -1425,6 +1428,53 @@ export function createTeachingOrchestrator(
         });
       }
 
+      // ── misconception resolution ────────────────────────────────────
+      // Positive evidence a misconception has been overcome. Purely additive
+      // to creates/strengthens above — never replaces matchMisconception() or
+      // planMisconceptionUpdates(), and never decided by an LLM. A correct
+      // structured answer that specifically avoided a known trap can reach
+      // RESOLVED (after two genuinely distinct verified checks); a correct
+      // free-form answer is weaker, undirected evidence capped at IMPROVING.
+      let resolutionOutcome: ResolutionOutcome | null = null;
+      const resolutionCandidates = existingForConcept.filter(
+        (m) => m.status === "ACTIVE" || m.status === "IMPROVING",
+      );
+      if (resolutionCandidates.length > 0) {
+        const isStructured = question.question_format !== "FREE_FORM";
+        const structuredQForResolution = isStructured
+          ? structuredQuestionFromRow(question)
+          : null;
+        const questionMisconceptionCategories = structuredQForResolution
+          ? misconceptionCategoriesInQuestion(structuredQForResolution)
+          : [];
+        for (const row of resolutionCandidates) {
+          const meta = (row.metadata as Record<string, unknown> | null) ?? {};
+          const found = evaluateMisconceptionResolution({
+            misconception: {
+              id: row.id,
+              category: row.category,
+              status: row.status,
+              clearedChecks: Number(meta.clearedChecks ?? 0),
+              lastVerifiedQuestionId:
+                typeof meta.lastVerifiedQuestionId === "string"
+                  ? meta.lastVerifiedQuestionId
+                  : null,
+            },
+            isStructured,
+            classification: evaluation.classification,
+            questionMisconceptionCategories,
+            questionId: question.id,
+          });
+          if (found) {
+            resolutionOutcome ??= found;
+            await misconceptions.updateStatus(found.id, found.statusAfter, {
+              clearedChecks: found.clearedChecks,
+              lastVerifiedQuestionId: found.lastVerifiedQuestionId,
+            });
+          }
+        }
+      }
+
       // Build the "Lumen noticed a pattern" detail from the now-persisted row —
       // whichever misconception this answer touched (created or strengthened).
       let misconceptionDetail: EvaluationView["misconception"] = null;
@@ -1545,6 +1595,10 @@ export function createTeachingOrchestrator(
           ),
           interventionSinceBefore: false,
           lastClassification: lastBefore?.classification ?? null,
+          misconceptionStatus: resolutionOutcome
+            ? (resolutionOutcome.statusBefore as
+                "ACTIVE" | "IMPROVING" | "RESOLVED")
+            : "none",
         };
         const after: EventSnapshot = {
           intelligence: afterIntel,
@@ -1555,6 +1609,9 @@ export function createTeachingOrchestrator(
             data.session.current_action,
           ),
           lastClassification: evaluation.classification,
+          misconceptionStatus: resolutionOutcome
+            ? resolutionOutcome.statusAfter
+            : "none",
         };
         intelligenceView = toIntelligenceView(afterIntel);
         const event = deriveLearningEvent(before, after);

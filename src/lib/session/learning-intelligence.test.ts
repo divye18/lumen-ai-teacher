@@ -531,6 +531,114 @@ describe("deriveLearningEvent", () => {
       "DIFFICULTY_MISMATCH",
     );
   });
+
+  it("6. MISCONCEPTION_IMPROVING — first verified check on an ACTIVE misconception", () => {
+    clock = 0;
+    const qs = [q("q1"), q("q2")];
+    const before = snap(
+      baseInput({ questions: qs, answers: [ans("q1", "INCORRECT")] }),
+      {
+        repeatedMisconceptionCount: 1,
+        interventionSinceBefore: false,
+        lastClassification: "INCORRECT",
+        misconceptionStatus: "ACTIVE",
+      },
+    );
+    const after = snap(
+      baseInput({
+        questions: qs,
+        answers: [ans("q1", "INCORRECT"), ans("q2", "CORRECT")],
+      }),
+      {
+        repeatedMisconceptionCount: 1,
+        interventionSinceBefore: false,
+        lastClassification: "CORRECT",
+        misconceptionStatus: "IMPROVING",
+      },
+    );
+    const ev = deriveLearningEvent(before, after);
+    expect(ev?.kind).toBe("MISCONCEPTION_IMPROVING");
+  });
+
+  it("7. MISCONCEPTION_CLEARED — a second distinct verified check resolves it", () => {
+    clock = 0;
+    const qs = [q("q1"), q("q2")];
+    const before = snap(
+      baseInput({ questions: qs, answers: [ans("q1", "CORRECT")] }),
+      {
+        repeatedMisconceptionCount: 1,
+        interventionSinceBefore: false,
+        lastClassification: "CORRECT",
+        misconceptionStatus: "IMPROVING",
+      },
+    );
+    const after = snap(
+      baseInput({
+        questions: qs,
+        answers: [ans("q1", "CORRECT"), ans("q2", "CORRECT")],
+      }),
+      {
+        repeatedMisconceptionCount: 1,
+        interventionSinceBefore: false,
+        lastClassification: "CORRECT",
+        misconceptionStatus: "RESOLVED",
+      },
+    );
+    const ev = deriveLearningEvent(before, after);
+    expect(ev?.kind).toBe("MISCONCEPTION_CLEARED");
+  });
+
+  it("no MISCONCEPTION_CLEARED when there was nothing tracked before (status 'none')", () => {
+    clock = 0;
+    const qs = [q("q1")];
+    const before = snap(baseInput({ questions: qs, answers: [] }), {
+      repeatedMisconceptionCount: 0,
+      interventionSinceBefore: false,
+      lastClassification: null,
+      misconceptionStatus: "none",
+    });
+    const after = snap(
+      baseInput({ questions: qs, answers: [ans("q1", "CORRECT")] }),
+      {
+        repeatedMisconceptionCount: 0,
+        interventionSinceBefore: false,
+        lastClassification: "CORRECT",
+        misconceptionStatus: "RESOLVED",
+      },
+    );
+    expect(deriveLearningEvent(before, after)?.kind).not.toBe(
+      "MISCONCEPTION_CLEARED",
+    );
+  });
+
+  it("no MISCONCEPTION_IMPROVING/CLEARED when misconceptionStatus is unchanged", () => {
+    clock = 0;
+    const qs = [q("q1"), q("q2")];
+    const before = snap(
+      baseInput({ questions: qs, answers: [ans("q1", "CORRECT")] }),
+      {
+        repeatedMisconceptionCount: 0,
+        interventionSinceBefore: false,
+        lastClassification: "CORRECT",
+        misconceptionStatus: "ACTIVE",
+      },
+    );
+    const after = snap(
+      baseInput({
+        questions: qs,
+        answers: [ans("q1", "CORRECT"), ans("q2", "INCORRECT")],
+      }),
+      {
+        repeatedMisconceptionCount: 0,
+        interventionSinceBefore: false,
+        lastClassification: "INCORRECT",
+        misconceptionStatus: "ACTIVE",
+      },
+    );
+    const ev = deriveLearningEvent(before, after);
+    expect(ev?.kind).not.toBe("MISCONCEPTION_IMPROVING");
+    expect(ev?.kind).not.toBe("MISCONCEPTION_CLEARED");
+  });
 });
 
 describe("deriveSessionEvents", () => {

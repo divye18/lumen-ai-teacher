@@ -46,7 +46,9 @@ export type LearningEventKind =
   | "PATTERN_CONFIRMED"
   | "DIFFICULTY_MISMATCH"
   | "READY_TO_ADVANCE"
-  | "MASTERY_STABILIZED";
+  | "MASTERY_STABILIZED"
+  | "MISCONCEPTION_IMPROVING"
+  | "MISCONCEPTION_CLEARED";
 
 export interface LearningIntelligence {
   concept: { key: string; title: string };
@@ -539,6 +541,13 @@ export interface EventSnapshot {
   /** An intervention happened on this concept between `before` and `after`. */
   interventionSinceBefore: boolean;
   lastClassification: string | null;
+  /**
+   * Status of the ONE misconception this answer's resolution evidence
+   * touched, if any — "none" when nothing on this concept is being tracked.
+   * Deliberately narrow: this is the resolution loop's signal, not a full
+   * roster (that's `repeatedMisconceptionCount`, already above).
+   */
+  misconceptionStatus?: "ACTIVE" | "IMPROVING" | "RESOLVED" | "none";
 }
 
 const EVENT_HEADLINE: Record<LearningEventKind, string> = {
@@ -547,6 +556,8 @@ const EVENT_HEADLINE: Record<LearningEventKind, string> = {
   DIFFICULTY_MISMATCH: "This is taking more effort than expected",
   READY_TO_ADVANCE: "Ready to move on",
   MASTERY_STABILIZED: "Concept locked in",
+  MISCONCEPTION_IMPROVING: "Working through it",
+  MISCONCEPTION_CLEARED: "Misconception cleared",
 };
 
 /**
@@ -578,6 +589,44 @@ export function deriveLearningEvent(
         "The same misunderstanding has come up more than once — Lumen is switching approach to target it.",
       next: "Work through it a different way.",
       signature: `pattern:${concept.key}`,
+      ...base,
+    };
+  }
+
+  // 1b. MISCONCEPTION_CLEARED — verified evidence resolved an active
+  // misconception. Never inferred from a mastery number — only from the
+  // resolution loop's own status transition.
+  if (
+    after.misconceptionStatus === "RESOLVED" &&
+    before.misconceptionStatus !== undefined &&
+    before.misconceptionStatus !== "RESOLVED" &&
+    before.misconceptionStatus !== "none"
+  ) {
+    return {
+      kind: "MISCONCEPTION_CLEARED",
+      headline: EVENT_HEADLINE.MISCONCEPTION_CLEARED,
+      summary:
+        "You've cleared a mix-up that kept coming back — Lumen won't keep flagging it.",
+      next: a.nextConcept
+        ? `Build on it with ${a.nextConcept.title}.`
+        : "Apply it in a new situation.",
+      signature: `misconception-cleared:${concept.key}`,
+      ...base,
+    };
+  }
+
+  // 1c. MISCONCEPTION_IMPROVING — the first verified sign of progress.
+  if (
+    after.misconceptionStatus === "IMPROVING" &&
+    before.misconceptionStatus === "ACTIVE"
+  ) {
+    return {
+      kind: "MISCONCEPTION_IMPROVING",
+      headline: EVENT_HEADLINE.MISCONCEPTION_IMPROVING,
+      summary:
+        "That answer avoided the mix-up Lumen has been tracking — one more clean check and it'll consider it cleared.",
+      next: "Keep going the way you just did.",
+      signature: `misconception-improving:${concept.key}`,
       ...base,
     };
   }
@@ -670,6 +719,10 @@ export function eventPresenceLine(kind: LearningEventKind): string {
       return "This one's solid now. Let's build on it.";
     case "DIFFICULTY_MISMATCH":
       return "This is taking more effort than expected. I'll reduce the load.";
+    case "MISCONCEPTION_IMPROVING":
+      return "That's the idea. Let's see it hold one more time.";
+    case "MISCONCEPTION_CLEARED":
+      return "That's the one that was tripping you up — and you've got past it.";
   }
 }
 
@@ -834,10 +887,12 @@ export function deriveSessionEvents(input: {
   // Priority-ish ordering for display: struggle signals first, then progress.
   const rank: Record<LearningEventKind, number> = {
     PATTERN_CONFIRMED: 0,
-    DIFFICULTY_MISMATCH: 1,
-    RECOVERY_DETECTED: 2,
-    MASTERY_STABILIZED: 3,
-    READY_TO_ADVANCE: 4,
+    MISCONCEPTION_CLEARED: 1,
+    MISCONCEPTION_IMPROVING: 2,
+    DIFFICULTY_MISMATCH: 3,
+    RECOVERY_DETECTED: 4,
+    MASTERY_STABILIZED: 5,
+    READY_TO_ADVANCE: 6,
   };
   return out.sort((a, b) => rank[a.kind] - rank[b.kind]);
 }
