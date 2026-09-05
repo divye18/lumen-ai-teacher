@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 
 import { CurriculumBreadcrumbs } from "@/components/curriculum/curriculum-breadcrumbs";
-import { CurriculumNodeGrid } from "@/components/curriculum/curriculum-node-grid";
+import { CurriculumTopicList } from "@/components/curriculum/curriculum-topic-list";
 import { EmptyState } from "@/components/ui/states";
 import { requireUser } from "@/lib/auth/current-user";
 import { createCurriculumStore } from "@/lib/db/repositories";
@@ -71,12 +71,9 @@ export default async function CurriculumTopicPage({
           description="This chapter doesn't have any topics yet."
         />
       ) : (
-        <CurriculumNodeGrid
-          items={topics.map((t, index) => ({
-            id: t.id,
-            title: t.title,
-            subtitle: `Topic ${index + 1} of ${topics.length}`,
-          }))}
+        <CurriculumTopicList
+          chapterTitle={chapterNode.title}
+          topics={topics.map((t) => ({ id: t.id, title: t.title }))}
         />
       )}
     </div>
