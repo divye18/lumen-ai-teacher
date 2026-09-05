@@ -6,11 +6,15 @@ Lumen is an adaptive AI teacher. It builds a model of what a student knows,
 detects misconceptions while they learn, and changes how it teaches until they
 understand.
 
-> **Status: adaptive teaching engine (P0 loop).** Foundation + Supabase
-> persistence + RAG ingestion/retrieval are in place, and the backend teaching
-> brain now runs end to end: material → lesson plan → teach → question →
-> evaluate → learner-state update → adaptive next decision. Learner-facing UI,
-> voice, avatar and 3D are still to come. See [Project status](#project-status).
+> **Status: adaptive teaching engine + learner-facing product.** Foundation +
+> Supabase persistence + RAG ingestion/retrieval + the full teaching loop
+> (material → lesson plan → teach → question → evaluate → learner-state
+> update → adaptive next decision) are in place, and so is the learner-facing
+> UI: diagnostic pre-assessment, the Teaching Room, misconception detection +
+> remediation + verification, session intelligence, and session completion.
+> Voice has a working foundation; avatar and 3D visuals are still evolving.
+> See [Project status](#project-status) and [DEMO.md](DEMO.md) for a demo
+> runbook.
 
 ## Core architecture principle
 
