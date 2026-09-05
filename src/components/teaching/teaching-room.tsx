@@ -504,6 +504,15 @@ export function TeachingRoom({
     (phase === "teaching" || phase === "question") && step
       ? step.decision.whyThisNext
       : null;
+  // 7.4's readiness read, already deterministic learner-facing prose (see
+  // learning-intelligence.ts's deriveConceptReadiness) — computed on every
+  // step but, until now, never actually surfaced anywhere in Teaching Room.
+  // Only shown once there's enough evidence to say something meaningful.
+  const stepReadinessNote =
+    (phase === "teaching" || phase === "question") &&
+    step?.intelligence?.hasEvidence
+      ? step.intelligence.readinessRationale
+      : null;
   const previousDecision =
     decisionHistory.length >= 2
       ? decisionHistory[decisionHistory.length - 2]
@@ -618,6 +627,7 @@ export function TeachingRoom({
                       ? step.decision.personalizationNote
                       : null
                   }
+                  readinessNote={stepReadinessNote}
                   className="mb-4"
                 />
               ) : null}

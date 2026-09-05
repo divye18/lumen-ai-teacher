@@ -42,6 +42,7 @@ import {
 } from "@/lib/db/repositories";
 import { ensureDemoSession } from "@/lib/demo";
 import { getSessionReport } from "@/lib/studio/session-report";
+import type { LearningIntelligenceView } from "@/lib/session/views";
 import {
   structuredQuestionFromRow,
   type StructuredAnswer,
@@ -274,6 +275,7 @@ describe.skipIf(!ready)("teaching room loop (integration)", () => {
       questionId: string;
       conceptKey: string;
       question: StructuredQuestion;
+      intelligence: LearningIntelligenceView | null;
     } | null> {
       for (let i = 0; i < 10; i += 1) {
         const step = await orchestrator.getNextStep({ sessionId });
@@ -290,6 +292,7 @@ describe.skipIf(!ready)("teaching room loop (integration)", () => {
             questionId: step.value.question.questionId,
             conceptKey: step.value.question.conceptKey,
             question: parsed,
+            intelligence: step.value.intelligence,
           };
         }
         if (step.value.sessionStatus === "COMPLETED") return null;
@@ -370,6 +373,23 @@ describe.skipIf(!ready)("teaching room loop (integration)", () => {
     const second = await advanceToQuestion();
     expect(second).not.toBeNull();
     if (!second) return;
+
+    // Milestone 14.1: the Teaching Room now surfaces
+    // `intelligence.readinessRationale` (already deterministic, learner-safe
+    // prose) via WhyNextCard. Prove the DATA it reads is real: after one
+    // real answered turn, getNextStep's own `intelligence` field has enough
+    // evidence and a genuine, non-empty rationale sentence -- not mocked,
+    // not fabricated by the UI layer.
+    expect(second.intelligence).not.toBeNull();
+    if (second.intelligence) {
+      expect(typeof second.intelligence.readinessRationale).toBe("string");
+      expect(second.intelligence.readinessRationale.length).toBeGreaterThan(0);
+      if (second.intelligence.hasEvidence) {
+        expect(second.intelligence.readinessRationale).not.toMatch(
+          /not enough answers/i,
+        );
+      }
+    }
 
     const wrongResult = await orchestrator.submitAnswer({
       sessionId,

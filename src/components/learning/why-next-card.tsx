@@ -13,6 +13,7 @@ import { cn } from "@/lib/ui/cn";
 export function WhyNextCard({
   explanation,
   personalizationNote = null,
+  readinessNote = null,
   className,
 }: {
   explanation: NextStepExplanation;
@@ -21,6 +22,14 @@ export function WhyNextCard({
    * shaped this step. Rendered as a distinct, quieter line beneath the reason.
    */
   personalizationNote?: string | null;
+  /**
+   * The teaching engine's current read on this concept — already
+   * deterministic, learner-safe prose (`LearningIntelligenceView.
+   * readinessRationale`), e.g. "You've applied this correctly and your
+   * recent answers are holding — ready to build on it." Shown only when
+   * there's enough evidence to say something meaningful.
+   */
+  readinessNote?: string | null;
   className?: string;
 }) {
   const reduce = useReducedMotion();
@@ -59,6 +68,18 @@ export function WhyNextCard({
       {personalizationNote ? (
         <p className="mt-2 border-t border-[var(--color-border)] pt-2 text-[11px] leading-snug text-[var(--color-accent)]">
           {personalizationNote}
+        </p>
+      ) : null}
+      {readinessNote ? (
+        <p
+          className={cn(
+            "text-[11px] leading-snug text-[var(--color-ink-faint)]",
+            personalizationNote
+              ? "mt-1.5"
+              : "mt-2 border-t border-[var(--color-border)] pt-2",
+          )}
+        >
+          {readinessNote}
         </p>
       ) : null}
     </motion.div>
