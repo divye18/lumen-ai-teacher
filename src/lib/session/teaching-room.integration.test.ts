@@ -606,4 +606,149 @@ describe.skipIf(!ready)("teaching room loop (integration)", () => {
       if (second.id) await admin.auth.admin.deleteUser(second.id);
     }
   }, 90_000);
+
+  it("re-serves the same pending question on repeated getNextStep calls, and only advances after an answer", async () => {
+    const third = {
+      email: `lumen-room-idem-${randomUUID().slice(0, 8)}@example.test`,
+      password: randomUUID(),
+      id: "",
+    };
+    const created = await admin.auth.admin.createUser({
+      email: third.email,
+      password: third.password,
+      email_confirm: true,
+    });
+    expect(created.error).toBeNull();
+    third.id = created.data.user!.id;
+
+    try {
+      const thirdClient = createClient<Database>(
+        url as string,
+        anonKey as string,
+      );
+      const signIn = await thirdClient.auth.signInWithPassword({
+        email: third.email,
+        password: third.password,
+      });
+      expect(signIn.error).toBeNull();
+
+      const demo = await ensureDemoSession(thirdClient, third.id);
+      expect(demo.ok).toBe(true);
+      if (!demo.ok) return;
+
+      const qa = createTeachingQaStore(thirdClient);
+
+      // A fresh orchestrator instance per call, deliberately -- proves the
+      // idempotency guard is based on persisted DB state, not anything an
+      // orchestrator instance might cache in memory across calls.
+      const freshOrchestrator = () =>
+        createTeachingOrchestrator({
+          db: thirdClient,
+          llm: null,
+          retriever: null,
+          userId: third.id,
+        });
+
+      const started = await freshOrchestrator().startOrResume({
+        lessonId: demo.value.lessonId,
+      });
+      expect(started.ok).toBe(true);
+      if (!started.ok) return;
+      const sessionId = started.value.sessionId;
+      await clearDiagnostic(
+        freshOrchestrator(),
+        sessionId,
+        started.value.diagnostic!.items,
+      );
+
+      // Test 1: the initial call creates and persists exactly one question.
+      let first: { questionId: string; conceptKey: string } | null = null;
+      for (let i = 0; i < 10 && !first; i += 1) {
+        const step = await freshOrchestrator().getNextStep({ sessionId });
+        expect(step.ok).toBe(true);
+        if (!step.ok) return;
+        if (step.value.question) {
+          first = {
+            questionId: step.value.question.questionId,
+            conceptKey: step.value.question.conceptKey,
+          };
+        }
+        if (step.value.sessionStatus === "COMPLETED") break;
+      }
+      expect(first).not.toBeNull();
+      if (!first) return;
+
+      const afterFirst = await qa.listQuestionsForSession(sessionId);
+      expect(afterFirst.ok).toBe(true);
+      const countForConcept = (
+        rows: Awaited<ReturnType<typeof qa.listQuestionsForSession>>,
+      ) =>
+        rows.ok
+          ? rows.value.filter((q) => q.concept_key === first!.conceptKey).length
+          : -1;
+      expect(countForConcept(afterFirst)).toBe(1);
+
+      // Test 2 + Test 6: a second call, from a BRAND NEW orchestrator
+      // instance (no shared in-memory state with the first call), must
+      // reconstruct and return the exact same question from persisted state.
+      const second = await freshOrchestrator().getNextStep({ sessionId });
+      expect(second.ok).toBe(true);
+      if (second.ok) {
+        expect(second.value.question).not.toBeNull();
+        expect(second.value.question?.questionId).toBe(first.questionId);
+      }
+
+      // Test 3: a third repeated call still returns the same question.
+      const third_ = await freshOrchestrator().getNextStep({ sessionId });
+      expect(third_.ok).toBe(true);
+      if (third_.ok) {
+        expect(third_.value.question).not.toBeNull();
+        expect(third_.value.question?.questionId).toBe(first.questionId);
+      }
+
+      // Test 4: still exactly one persisted question row for this concept --
+      // three getNextStep calls, zero new rows created since the first.
+      const afterRepeats = await qa.listQuestionsForSession(sessionId);
+      expect(countForConcept(afterRepeats)).toBe(1);
+
+      // Test 5: once the learner actually answers, normal progression can
+      // create/select the next step -- the pending question is now answered,
+      // so it's no longer eligible to be re-served.
+      const row = await qa.getQuestion(first.questionId);
+      expect(row.ok).toBe(true);
+      if (!row.ok) return;
+      const parsed = structuredQuestionFromRow(row.value);
+      expect(parsed).not.toBeNull();
+      if (!parsed) return;
+
+      const answerResult = await freshOrchestrator().submitAnswer({
+        sessionId,
+        questionId: first.questionId,
+        answerText: JSON.stringify(correctAnswerFor(parsed)),
+      });
+      expect(answerResult.ok).toBe(true);
+
+      const afterAnswer = await freshOrchestrator().getNextStep({ sessionId });
+      expect(afterAnswer.ok).toBe(true);
+      if (afterAnswer.ok) {
+        // Progression happened: either a genuinely different question, or a
+        // non-question step (teaching content / advance) -- never the exact
+        // same still-pending question, since it's now answered.
+        const sameQuestionAgain =
+          afterAnswer.value.question?.questionId === first.questionId;
+        expect(sameQuestionAgain).toBe(false);
+      }
+
+      // No duplicate row was created for the ORIGINAL question by any of
+      // this -- the guard never re-persists what it re-serves.
+      const finalCount = await qa.listQuestionsForSession(sessionId);
+      expect(
+        finalCount.ok
+          ? finalCount.value.filter((q) => q.id === first.questionId).length
+          : -1,
+      ).toBe(1);
+    } finally {
+      if (third.id) await admin.auth.admin.deleteUser(third.id);
+    }
+  }, 90_000);
 });

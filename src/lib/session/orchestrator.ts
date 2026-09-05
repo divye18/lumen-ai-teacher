@@ -128,6 +128,7 @@ import type {
   DiagnosticCompletionView,
   EvaluationView,
   InteractionResultView,
+  QuestionView,
   SessionProgress,
   SessionView,
   TeachingStepView,
@@ -621,11 +622,65 @@ export function createTeachingOrchestrator(
         action: decision.action,
         strategy: decision.strategy,
         difficultyDirection: decision.difficultyDirection,
+        targetConceptKey: decision.targetConceptKey,
+        nextAction: decision.nextAction,
         source: decision.source,
         overrides: decision.overrides,
         adaptationNarrative: decision.adaptationNarrative,
       },
     });
+  }
+
+  /**
+   * Rebuild the `ResolvedTeachingDecision` that led to a still-pending
+   * question, from the persisted "teaching_decision" SYSTEM interaction
+   * `recordDecision` wrote at the time — so re-serving that question never
+   * needs to ask the policy to decide again. Returns `null` for anything
+   * that doesn't look like a valid, complete record (e.g. a legacy row from
+   * before `targetConceptKey`/`nextAction` were added), which safely falls
+   * through to the normal decision pipeline.
+   */
+  function toResolvedDecisionFromInteraction(
+    interaction: SessionContextData["sessionInteractions"][number] | undefined,
+    conceptKey: string,
+  ): ResolvedTeachingDecision | null {
+    if (!interaction) return null;
+    const meta = interaction.metadata as Record<string, unknown> | null;
+    if (!meta) return null;
+    const action = meta.action;
+    const strategy = meta.strategy;
+    const difficultyDirection = meta.difficultyDirection;
+    const source = meta.source;
+    if (
+      typeof action !== "string" ||
+      typeof strategy !== "string" ||
+      typeof difficultyDirection !== "string" ||
+      typeof source !== "string"
+    ) {
+      return null;
+    }
+    return {
+      action: action as ResolvedTeachingDecision["action"],
+      strategy: strategy as ResolvedTeachingDecision["strategy"],
+      difficultyDirection:
+        difficultyDirection as ResolvedTeachingDecision["difficultyDirection"],
+      targetConceptKey:
+        typeof meta.targetConceptKey === "string"
+          ? meta.targetConceptKey
+          : conceptKey,
+      reason: interaction.content ?? "",
+      nextAction:
+        typeof meta.nextAction === "string"
+          ? (meta.nextAction as ResolvedTeachingDecision["nextAction"])
+          : null,
+      source: source as ResolvedTeachingDecision["source"],
+      overrides: Array.isArray(meta.overrides)
+        ? (meta.overrides as string[])
+        : [],
+      adaptationNarrative: Array.isArray(meta.adaptationNarrative)
+        ? (meta.adaptationNarrative as string[])
+        : [],
+    };
   }
 
   async function buildSessionView(
@@ -926,6 +981,108 @@ export function createTeachingOrchestrator(
       );
       const signal = buildEngineSignal(data);
       const src = await sourceContextFor(data);
+
+      // Idempotency guard, based purely on already-persisted state: if the
+      // current concept already has a question that was asked but never
+      // answered, re-serve that exact question instead of asking the
+      // deterministic policy to decide again. This matters because the
+      // policy's own inputs (`triedStrategies`, via the SYSTEM
+      // "teaching_decision" interactions `recordDecision` persists) are
+      // themselves built from decision history — calling `engine.decide()`
+      // again with no new evidence still records another decision, which
+      // can shift `triedStrategies`/`lastQuestionKind` and legitimately
+      // change what the SAME deterministic policy decides next, even though
+      // nothing the learner did has changed. A plain page reload (or the
+      // client re-polling) must never do that. Falls through to the normal
+      // pipeline whenever there's no pending question, or reconstruction
+      // isn't possible (e.g. legacy rows missing the fields below) — the
+      // deterministic policy itself is never changed by this guard.
+      const answeredQuestionIds = new Set(
+        data.recentAnswers.map((a) => a.question_id),
+      );
+      const pendingQuestion = [...data.recentQuestions]
+        .filter(
+          (q) =>
+            q.concept_key === engineConcept.key &&
+            !answeredQuestionIds.has(q.id),
+        )
+        .sort(
+          (a, b) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+        )[0];
+      if (pendingQuestion) {
+        const pendingDecisionInteraction = [...data.sessionInteractions]
+          .filter((i) => {
+            if (i.role !== "SYSTEM") return false;
+            const meta = i.metadata as Record<string, unknown> | null;
+            return (
+              meta?.kind === "teaching_decision" &&
+              meta.conceptKey === engineConcept.key
+            );
+          })
+          .sort(
+            (a, b) =>
+              new Date(b.created_at).getTime() -
+              new Date(a.created_at).getTime(),
+          )[0];
+
+        const pendingDecision = toResolvedDecisionFromInteraction(
+          pendingDecisionInteraction,
+          engineConcept.key,
+        );
+
+        const pendingQuestionView =
+          pendingQuestion.question_format === "FREE_FORM"
+            ? ({
+                questionId: pendingQuestion.id,
+                kind: pendingQuestion.question_kind as QuestionView["kind"],
+                difficulty: pendingQuestion.difficulty,
+                prompt: pendingQuestion.prompt,
+                conceptKey: pendingQuestion.concept_key,
+                groundedInSource: pendingQuestion.source_grounded,
+                format: "FREE_FORM" as const,
+                structured: null,
+              } satisfies TeachingStepView["question"])
+            : await (async () => {
+                const fullRow = await qa.getQuestion(pendingQuestion.id);
+                const sq = fullRow.ok
+                  ? structuredQuestionFromRow(fullRow.value)
+                  : null;
+                if (!sq) return null;
+                return {
+                  questionId: pendingQuestion.id,
+                  kind: sq.kind,
+                  difficulty: sq.difficulty,
+                  prompt: sq.prompt,
+                  conceptKey: pendingQuestion.concept_key,
+                  groundedInSource: false,
+                  format: sq.format,
+                  structured: toClientStructured(sq, pendingQuestion.id),
+                } satisfies TeachingStepView["question"];
+              })();
+
+        if (pendingDecision && pendingQuestionView) {
+          return ok({
+            sessionId: data.session.id,
+            decision: nextDecisionView(pendingDecision, facts, {
+              conceptTitle: engineConcept.title,
+              misconceptionDetectionCount: maxDetections || undefined,
+              personalizationNote: personalization.note,
+            }),
+            content: null,
+            question: pendingQuestionView,
+            citations: [],
+            progress: progressOf(
+              data.session,
+              data.lessonConcepts,
+              Math.round(data.timeElapsedMinutes),
+            ),
+            sessionStatus: "ACTIVE",
+            intelligence: intelligenceView,
+            liveStatus: liveStatusFor(pendingQuestionView.kind),
+          });
+        }
+      }
 
       const decision = await engine.decide({
         facts,
