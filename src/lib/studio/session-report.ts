@@ -321,6 +321,13 @@ export async function getSessionReport(
       (a, b) => b.evidence.confidence - a.evidence.confidence,
     )[0]?.summary ?? null;
 
+  const misconceptionsByConcept = misconceptionsCreatedThisSession
+    .map((m) => {
+      const conceptKey = conceptKeyByConceptId.get(m.concept_id);
+      return conceptKey ? { conceptKey, status: m.status } : null;
+    })
+    .filter((v): v is { conceptKey: string; status: string } => v !== null);
+
   const learningEvents = deriveSessionEvents({
     concepts: outcomes.map((o) => ({
       key: o.key,
@@ -332,6 +339,7 @@ export async function getSessionReport(
     questions,
     interactions: sessionInteractions,
     graph,
+    misconceptionsByConcept,
   }).map(toLearningEventView);
 
   const masteryGained = outcomes

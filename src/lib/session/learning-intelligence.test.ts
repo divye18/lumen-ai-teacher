@@ -706,6 +706,152 @@ describe("deriveSessionEvents", () => {
     });
     expect(events.some((e) => e.kind === "PATTERN_CONFIRMED")).toBe(true);
   });
+
+  // Milestone 14.2 — misconceptions CREATED this session (see
+  // `misconception-store.ts`'s `listCreatedInSession`) whose CURRENT status
+  // reflects real progress. No answers/interactions are needed for these —
+  // the evidence is the persisted status transition itself.
+  it("no misconceptionsByConcept -> no misconception events (existing behavior unchanged)", () => {
+    const events = deriveSessionEvents({
+      concepts: [
+        { key: "cache", title: "CPU Cache", masteryStart: 40, masteryEnd: 40 },
+      ],
+      answers: [],
+      questions: [],
+      interactions: [],
+    });
+    expect(events).toEqual([]);
+  });
+
+  it("RESOLVED misconception -> one MISCONCEPTION_CLEARED", () => {
+    const events = deriveSessionEvents({
+      concepts: [
+        { key: "cache", title: "CPU Cache", masteryStart: 40, masteryEnd: 60 },
+      ],
+      answers: [],
+      questions: [],
+      interactions: [],
+      misconceptionsByConcept: [{ conceptKey: "cache", status: "RESOLVED" }],
+    });
+    expect(events).toHaveLength(1);
+    expect(events[0].kind).toBe("MISCONCEPTION_CLEARED");
+    expect(events[0].concept.key).toBe("cache");
+  });
+
+  it("IMPROVING misconception -> one MISCONCEPTION_IMPROVING", () => {
+    const events = deriveSessionEvents({
+      concepts: [
+        { key: "cache", title: "CPU Cache", masteryStart: 40, masteryEnd: 50 },
+      ],
+      answers: [],
+      questions: [],
+      interactions: [],
+      misconceptionsByConcept: [{ conceptKey: "cache", status: "IMPROVING" }],
+    });
+    expect(events).toHaveLength(1);
+    expect(events[0].kind).toBe("MISCONCEPTION_IMPROVING");
+  });
+
+  it("ACTIVE misconception -> no event (unresolved, not yet improving)", () => {
+    const events = deriveSessionEvents({
+      concepts: [
+        { key: "cache", title: "CPU Cache", masteryStart: 40, masteryEnd: 40 },
+      ],
+      answers: [],
+      questions: [],
+      interactions: [],
+      misconceptionsByConcept: [{ conceptKey: "cache", status: "ACTIVE" }],
+    });
+    expect(events).toEqual([]);
+  });
+
+  it("de-duplicates two RESOLVED misconceptions on the same concept into one event", () => {
+    const events = deriveSessionEvents({
+      concepts: [
+        { key: "cache", title: "CPU Cache", masteryStart: 40, masteryEnd: 60 },
+      ],
+      answers: [],
+      questions: [],
+      interactions: [],
+      misconceptionsByConcept: [
+        { conceptKey: "cache", status: "RESOLVED" },
+        { conceptKey: "cache", status: "RESOLVED" },
+      ],
+    });
+    expect(
+      events.filter((e) => e.kind === "MISCONCEPTION_CLEARED"),
+    ).toHaveLength(1);
+  });
+
+  it("ignores a misconception whose concept is not in this session's concept list", () => {
+    const events = deriveSessionEvents({
+      concepts: [
+        { key: "cache", title: "CPU Cache", masteryStart: 40, masteryEnd: 60 },
+      ],
+      answers: [],
+      questions: [],
+      interactions: [],
+      misconceptionsByConcept: [
+        { conceptKey: "unrelated-concept", status: "RESOLVED" },
+      ],
+    });
+    expect(events).toEqual([]);
+  });
+
+  it("orders MISCONCEPTION_CLEARED before MISCONCEPTION_IMPROVING (struggle-resolution rank)", () => {
+    const events = deriveSessionEvents({
+      concepts: [
+        { key: "cache", title: "CPU Cache", masteryStart: 40, masteryEnd: 60 },
+        {
+          key: "memory",
+          title: "Memory Hierarchy",
+          masteryStart: 30,
+          masteryEnd: 45,
+        },
+      ],
+      answers: [],
+      questions: [],
+      interactions: [],
+      misconceptionsByConcept: [
+        { conceptKey: "memory", status: "IMPROVING" },
+        { conceptKey: "cache", status: "RESOLVED" },
+      ],
+    });
+    expect(events.map((e) => e.kind)).toEqual([
+      "MISCONCEPTION_CLEARED",
+      "MISCONCEPTION_IMPROVING",
+    ]);
+  });
+
+  it("mixes misconception events with answer-derived events for a different concept", () => {
+    clock = 0;
+    const questions = [q("q1"), q("q2")];
+    const answers = [
+      ans("q1", "INCORRECT", {
+        evaluation: { misconceptionCandidates: [{ category: "swap-latency" }] },
+      }),
+      ans("q2", "INCORRECT", {
+        evaluation: { misconceptionCandidates: [{ category: "swap-latency" }] },
+      }),
+    ];
+    const events = deriveSessionEvents({
+      concepts: [
+        { key: "cache", title: "CPU Cache", masteryStart: 40, masteryEnd: 38 },
+        {
+          key: "memory",
+          title: "Memory Hierarchy",
+          masteryStart: 30,
+          masteryEnd: 60,
+        },
+      ],
+      answers,
+      questions,
+      interactions: [],
+      misconceptionsByConcept: [{ conceptKey: "memory", status: "RESOLVED" }],
+    });
+    expect(events.some((e) => e.kind === "PATTERN_CONFIRMED")).toBe(true);
+    expect(events.some((e) => e.kind === "MISCONCEPTION_CLEARED")).toBe(true);
+  });
 });
 
 describe("repeatedMisconceptionCount", () => {

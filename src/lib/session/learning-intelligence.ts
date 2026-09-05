@@ -743,11 +743,62 @@ export function deriveSessionEvents(input: {
   questions: ClientTeachingQuestion[];
   interactions: InteractionRow[];
   graph?: KnowledgeGraphView | null;
+  /**
+   * The CURRENT status of misconceptions CREATED during this session (see
+   * `misconception-store.ts`'s `listCreatedInSession` — `session_id` is
+   * stamped once, at creation, so this is real, session-scoped evidence,
+   * never inferred). Drives `MISCONCEPTION_IMPROVING`/`MISCONCEPTION_CLEARED`
+   * — the same vocabulary the live Teaching Room already shows for these
+   * transitions (`deriveLearningEvent`), just never previously surfaced here.
+   */
+  misconceptionsByConcept?: { conceptKey: string; status: string }[];
 }): LearningEvent[] {
   const kindById = new Map(input.questions.map((q) => [q.id, q.question_kind]));
   const conceptOf = new Map(input.questions.map((q) => [q.id, q.concept_key]));
+  const conceptByKey = new Map(input.concepts.map((c) => [c.key, c]));
   const seen = new Set<string>();
   const out: LearningEvent[] = [];
+  const push = (ev: LearningEvent) => {
+    if (!seen.has(ev.signature)) {
+      seen.add(ev.signature);
+      out.push(ev);
+    }
+  };
+
+  for (const m of input.misconceptionsByConcept ?? []) {
+    if (m.status !== "RESOLVED" && m.status !== "IMPROVING") continue;
+    const concept = conceptByKey.get(m.conceptKey);
+    if (!concept) continue;
+    const base = {
+      concept: { key: concept.key, title: concept.title },
+      masteryFrom: Math.round(concept.masteryStart),
+      masteryTo: Math.round(concept.masteryEnd),
+    };
+    const next = deriveNextConcept(input.graph, concept.key);
+    if (m.status === "RESOLVED") {
+      push({
+        kind: "MISCONCEPTION_CLEARED",
+        headline: EVENT_HEADLINE.MISCONCEPTION_CLEARED,
+        summary:
+          "You worked through a mix-up that came up this session — Lumen won't keep flagging it.",
+        next: next
+          ? `Build on it with ${next.title}.`
+          : "Apply it in a new situation.",
+        signature: `misconception-cleared:${concept.key}`,
+        ...base,
+      });
+    } else {
+      push({
+        kind: "MISCONCEPTION_IMPROVING",
+        headline: EVENT_HEADLINE.MISCONCEPTION_IMPROVING,
+        summary:
+          "You're becoming more consistent with an idea that tripped you up earlier this session.",
+        next: "Keep going the way you just did.",
+        signature: `misconception-improving:${concept.key}`,
+        ...base,
+      });
+    }
+  }
 
   for (const concept of input.concepts) {
     const answers = input.answers
@@ -765,12 +816,6 @@ export function deriveSessionEvents(input: {
       masteryTo: Math.round(concept.masteryEnd),
     };
     const next = deriveNextConcept(input.graph, concept.key);
-    const push = (ev: LearningEvent) => {
-      if (!seen.has(ev.signature)) {
-        seen.add(ev.signature);
-        out.push(ev);
-      }
-    };
 
     // RECOVERY_DETECTED — wrong, then (with help in between) right.
     for (let i = 1; i < answers.length; i += 1) {

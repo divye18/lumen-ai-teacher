@@ -482,6 +482,26 @@ describe.skipIf(!ready)("teaching room loop (integration)", () => {
         expect(
           finalReport.value.misconceptionsIdentified,
         ).toBeGreaterThanOrEqual(createdThisSession.value.length);
+
+        // Milestone 14.2: if the misconception created THIS session has
+        // already progressed past ACTIVE (real DB state, not asserted by
+        // this test), the session-complete report's `learningEvents` must
+        // reflect it -- proving `deriveSessionEvents` is actually wired to
+        // `misconceptions.status`, not just to answer/interaction history.
+        const progressed = createdThisSession.value.filter(
+          (m) => m.status === "IMPROVING" || m.status === "RESOLVED",
+        );
+        for (const m of progressed) {
+          const expectedKind =
+            m.status === "RESOLVED"
+              ? "MISCONCEPTION_CLEARED"
+              : "MISCONCEPTION_IMPROVING";
+          expect(
+            finalReport.value.learningEvents.some(
+              (e) => e.kind === expectedKind,
+            ),
+          ).toBe(true);
+        }
       }
     } else {
       // No bank question in this run's turn budget happened to carry a
