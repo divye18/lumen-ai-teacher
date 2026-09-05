@@ -50,6 +50,7 @@ const lesson: LessonRow = {
   id: "1e550000-0000-0000-0000-000000000001",
   user_id: USER,
   document_id: null,
+  curriculum_node_id: null,
   title: "Operating Systems",
   topic: "Operating Systems",
   objective: "Understand demand paging",

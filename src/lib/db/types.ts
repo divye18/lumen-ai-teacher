@@ -359,6 +359,7 @@ export interface Database {
           id: Uuid;
           user_id: Uuid;
           document_id: Uuid | null;
+          curriculum_node_id: Uuid | null;
           title: string;
           topic: string;
           objective: string;
@@ -377,6 +378,7 @@ export interface Database {
           id?: Uuid;
           user_id: Uuid;
           document_id?: Uuid | null;
+          curriculum_node_id?: Uuid | null;
           title: string;
           topic: string;
           objective: string;
@@ -395,6 +397,7 @@ export interface Database {
           id?: Uuid;
           user_id?: Uuid;
           document_id?: Uuid | null;
+          curriculum_node_id?: Uuid | null;
           title?: string;
           topic?: string;
           objective?: string;
