@@ -227,3 +227,46 @@ export type TeachingActionName = (typeof TEACHING_ACTIONS)[number];
 export const TEACHING_STYLES = LEARNING_STRATEGIES;
 export type TeachingStyle = LearningStrategy;
 export const teachingStyleSchema = learningStrategySchema;
+
+// ── Milestone 17.2: curriculum foundation ───────────────────────────────────
+
+/** Open, extensible — not tied to NCERT specifically. */
+export const CURRICULUM_SOURCE_KINDS = [
+  "NCERT",
+  "USER_UPLOAD",
+  "CBSE",
+  "ICSE",
+  "UNIVERSITY",
+  "OTHER",
+] as const;
+export type CurriculumSourceKind = (typeof CURRICULUM_SOURCE_KINDS)[number];
+export const curriculumSourceKindSchema = z.enum(CURRICULUM_SOURCE_KINDS);
+
+export const CURRICULUM_SOURCE_STATUSES = [
+  "DRAFT",
+  "READY",
+  "ARCHIVED",
+] as const;
+export type CurriculumSourceStatus =
+  (typeof CURRICULUM_SOURCE_STATUSES)[number];
+export const curriculumSourceStatusSchema = z.enum(CURRICULUM_SOURCE_STATUSES);
+
+/** A descriptive label only — never a depth ceiling. Actual nesting depth is
+ * unbounded via `curriculum_nodes.parent_id`. `OTHER` is an escape hatch so a
+ * future, deeper convention never needs a migration just to add a name. */
+export const CURRICULUM_NODE_TYPES = [
+  "CLASS",
+  "SUBJECT",
+  "CHAPTER",
+  "TOPIC",
+  "SUBTOPIC",
+  "SECTION",
+  "DOCUMENT",
+  "OTHER",
+] as const;
+export type CurriculumNodeType = (typeof CURRICULUM_NODE_TYPES)[number];
+export const curriculumNodeTypeSchema = z.enum(CURRICULUM_NODE_TYPES);
+
+export const CURRICULUM_NODE_STATUSES = ["ACTIVE", "ARCHIVED"] as const;
+export type CurriculumNodeStatus = (typeof CURRICULUM_NODE_STATUSES)[number];
+export const curriculumNodeStatusSchema = z.enum(CURRICULUM_NODE_STATUSES);

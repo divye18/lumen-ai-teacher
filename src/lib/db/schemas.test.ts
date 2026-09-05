@@ -4,15 +4,22 @@ import {
   completeAssessmentSchema,
   conceptMasteryUpsertSchema,
   createConceptRelationshipSchema,
+  createCurriculumNodeSchema,
+  createCurriculumSourceSchema,
   learnerProfileUpsertSchema,
   recordInteractionSchema,
   recordMisconceptionSchema,
+  updateCurriculumNodeSchema,
+  updateCurriculumSourceSchema,
 } from "./schemas";
 import { supportedLanguageSchema } from "./enums";
+import { normalizeSyllabusTitle } from "@/lib/syllabus/structure";
 
 const USER = "00000000-0000-0000-0000-000000000001";
 const CONCEPT = "c0000000-0000-0000-0000-000000000001";
 const SESSION = "5e550000-0000-0000-0000-000000000001";
+const SOURCE = "50000000-0000-0000-0000-000000000001";
+const PARENT_NODE = "10000000-0000-0000-0000-000000000001";
 
 describe("supported language validation", () => {
   it.each(["en", "hi", "hinglish"])("accepts %s", (lang) => {
@@ -176,5 +183,244 @@ describe("repository input validation", () => {
       preferredLanguage: "de",
     });
     expect(r.success).toBe(false);
+  });
+});
+
+// Milestone 17.2 — curriculum foundation. The natural-key uniqueness itself
+// (source + parent + type + normalized title) is a DB-level constraint,
+// verified against a real database in curriculum.integration.test.ts; these
+// cover the schema-validation boundary that's testable without one.
+describe("curriculum source validation", () => {
+  it("A. accepts a shared/global source (ownerUserId omitted)", () => {
+    const r = createCurriculumSourceSchema.safeParse({
+      kind: "NCERT",
+      title: "NCERT",
+    });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.ownerUserId).toBeUndefined();
+      expect(r.data.status).toBe("DRAFT");
+    }
+  });
+
+  it("F. accepts an explicitly private source (nullable owner, set)", () => {
+    const r = createCurriculumSourceSchema.safeParse({
+      ownerUserId: USER,
+      kind: "USER_UPLOAD",
+      title: "My uploaded notes",
+    });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.ownerUserId).toBe(USER);
+  });
+
+  it("accepts every documented kind", () => {
+    for (const kind of [
+      "NCERT",
+      "USER_UPLOAD",
+      "CBSE",
+      "ICSE",
+      "UNIVERSITY",
+      "OTHER",
+    ]) {
+      const r = createCurriculumSourceSchema.safeParse({ kind, title: "X" });
+      expect(r.success).toBe(true);
+    }
+  });
+
+  it("K. rejects an unrecognized kind", () => {
+    const r = createCurriculumSourceSchema.safeParse({
+      kind: "MADE_UP_BOARD",
+      title: "X",
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it("rejects a blank title", () => {
+    const r = createCurriculumSourceSchema.safeParse({
+      kind: "NCERT",
+      title: "",
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it("I. accepts a free-text dataset version, and its absence", () => {
+    const withVersion = createCurriculumSourceSchema.safeParse({
+      kind: "NCERT",
+      title: "NCERT",
+      version: "2024-25",
+    });
+    expect(withVersion.success).toBe(true);
+    if (withVersion.success) expect(withVersion.data.version).toBe("2024-25");
+
+    const withoutVersion = createCurriculumSourceSchema.safeParse({
+      kind: "NCERT",
+      title: "NCERT",
+    });
+    expect(withoutVersion.success).toBe(true);
+    if (withoutVersion.success)
+      expect(withoutVersion.data.version).toBeUndefined();
+  });
+
+  it("I. a later version is just a new value — updating in place is supported", () => {
+    const r = updateCurriculumSourceSchema.safeParse({
+      id: SOURCE,
+      version: "2025-26",
+      status: "READY",
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("rejects an unrecognized status", () => {
+    const r = createCurriculumSourceSchema.safeParse({
+      kind: "NCERT",
+      title: "NCERT",
+      status: "PUBLISHED",
+    });
+    expect(r.success).toBe(false);
+  });
+});
+
+describe("curriculum node validation", () => {
+  const baseNode = {
+    curriculumSourceId: SOURCE,
+    nodeType: "SUBJECT" as const,
+    title: "Physics",
+    normalizedTitle: "physics",
+  };
+
+  it("B. accepts a minimal valid node", () => {
+    const r = createCurriculumNodeSchema.safeParse(baseNode);
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.position).toBe(0);
+      expect(r.data.status).toBe("ACTIVE");
+    }
+  });
+
+  it("D. accepts an explicit parentId (child node)", () => {
+    const r = createCurriculumNodeSchema.safeParse({
+      ...baseNode,
+      nodeType: "CHAPTER",
+      title: "Current Electricity",
+      normalizedTitle: "current electricity",
+      parentId: PARENT_NODE,
+    });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.parentId).toBe(PARENT_NODE);
+  });
+
+  it("D. omitting parentId represents a root node", () => {
+    const r = createCurriculumNodeSchema.safeParse(baseNode);
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.parentId).toBeUndefined();
+  });
+
+  it("C. accepts every documented node type, supporting arbitrary depth via parentId rather than the type list", () => {
+    for (const nodeType of [
+      "CLASS",
+      "SUBJECT",
+      "CHAPTER",
+      "TOPIC",
+      "SUBTOPIC",
+      "SECTION",
+      "DOCUMENT",
+      "OTHER",
+    ]) {
+      const r = createCurriculumNodeSchema.safeParse({ ...baseNode, nodeType });
+      expect(r.success).toBe(true);
+    }
+  });
+
+  it("K. rejects an unrecognized node type", () => {
+    const r = createCurriculumNodeSchema.safeParse({
+      ...baseNode,
+      nodeType: "SEMESTER",
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it("G. position must be a non-negative integer", () => {
+    expect(
+      createCurriculumNodeSchema.safeParse({ ...baseNode, position: 3 })
+        .success,
+    ).toBe(true);
+    expect(
+      createCurriculumNodeSchema.safeParse({ ...baseNode, position: -1 })
+        .success,
+    ).toBe(false);
+    expect(
+      createCurriculumNodeSchema.safeParse({ ...baseNode, position: 1.5 })
+        .success,
+    ).toBe(false);
+  });
+
+  it("never invents a page number: pageStart/pageEnd are nullable and non-negative when present", () => {
+    const r = createCurriculumNodeSchema.safeParse({
+      ...baseNode,
+      pageStart: 12,
+      pageEnd: 30,
+    });
+    expect(r.success).toBe(true);
+    expect(
+      createCurriculumNodeSchema.safeParse({ ...baseNode, pageStart: -1 })
+        .success,
+    ).toBe(false);
+  });
+
+  it("K. rejects a blank normalizedTitle", () => {
+    const r = createCurriculumNodeSchema.safeParse({
+      ...baseNode,
+      normalizedTitle: "",
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it("updateCurriculumNodeSchema allows a partial patch, e.g. archiving a node", () => {
+    const r = updateCurriculumNodeSchema.safeParse({
+      id: PARENT_NODE,
+      status: "ARCHIVED",
+    });
+    expect(r.success).toBe(true);
+  });
+});
+
+// H / J. Deterministic natural-key input: `normalizedTitle` is expected to be
+// computed via the existing, already-tested `normalizeSyllabusTitle` (reused,
+// not duplicated) so "Unit I" and "Unit 1" collide under the DB's natural-key
+// uniqueness constraint exactly the same way they already collide for the
+// PDF-derived structure builder.
+describe("curriculum node natural-key input (normalizedTitle)", () => {
+  it("H/J. the same normalization used for PDF-derived titles applies to curriculum node titles", () => {
+    expect(normalizeSyllabusTitle("Unit I")).toBe(
+      normalizeSyllabusTitle("Unit 1"),
+    );
+    expect(normalizeSyllabusTitle("  Physics  ")).toBe(
+      normalizeSyllabusTitle("physics"),
+    );
+  });
+
+  it("H/J. distinct titles normalize distinctly (no over-collapsing)", () => {
+    expect(normalizeSyllabusTitle("Physics")).not.toBe(
+      normalizeSyllabusTitle("Chemistry"),
+    );
+  });
+
+  it("J. is deterministic — same input, same natural-key material every time", () => {
+    const a = createCurriculumNodeSchema.safeParse({
+      curriculumSourceId: SOURCE,
+      nodeType: "SUBJECT",
+      title: "Physics",
+      normalizedTitle: normalizeSyllabusTitle("Physics"),
+    });
+    const b = createCurriculumNodeSchema.safeParse({
+      curriculumSourceId: SOURCE,
+      nodeType: "SUBJECT",
+      title: "Physics",
+      normalizedTitle: normalizeSyllabusTitle("Physics"),
+    });
+    expect(a.success && b.success).toBe(true);
+    if (a.success && b.success) {
+      expect(a.data.normalizedTitle).toBe(b.data.normalizedTitle);
+    }
   });
 });

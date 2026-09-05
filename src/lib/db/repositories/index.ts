@@ -73,5 +73,11 @@ export {
   type TeachingAnswerRow,
   type ClientTeachingQuestion,
 } from "./teaching-qa-store";
+export {
+  createCurriculumStore,
+  type CurriculumStore,
+  type CurriculumSourceRow,
+  type CurriculumNodeRow,
+} from "./curriculum-store";
 
 export { type DbClient } from "./shared";

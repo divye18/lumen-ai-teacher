@@ -826,6 +826,92 @@ export interface Database {
         };
         Relationships: [];
       };
+
+      curriculum_sources: {
+        Row: {
+          id: Uuid;
+          owner_user_id: Uuid | null;
+          kind: string;
+          title: string;
+          status: string;
+          version: string | null;
+          metadata: Json;
+          created_at: Timestamptz;
+          updated_at: Timestamptz;
+        };
+        Insert: {
+          id?: Uuid;
+          owner_user_id?: Uuid | null;
+          kind: string;
+          title: string;
+          status?: string;
+          version?: string | null;
+          metadata?: Json;
+          created_at?: Timestamptz;
+          updated_at?: Timestamptz;
+        };
+        Update: {
+          id?: Uuid;
+          owner_user_id?: Uuid | null;
+          kind?: string;
+          title?: string;
+          status?: string;
+          version?: string | null;
+          metadata?: Json;
+          created_at?: Timestamptz;
+          updated_at?: Timestamptz;
+        };
+        Relationships: [];
+      };
+
+      curriculum_nodes: {
+        Row: {
+          id: Uuid;
+          curriculum_source_id: Uuid;
+          parent_id: Uuid | null;
+          node_type: string;
+          title: string;
+          normalized_title: string;
+          position: number;
+          page_start: number | null;
+          page_end: number | null;
+          metadata: Json;
+          status: string;
+          created_at: Timestamptz;
+          updated_at: Timestamptz;
+        };
+        Insert: {
+          id?: Uuid;
+          curriculum_source_id: Uuid;
+          parent_id?: Uuid | null;
+          node_type: string;
+          title: string;
+          normalized_title: string;
+          position?: number;
+          page_start?: number | null;
+          page_end?: number | null;
+          metadata?: Json;
+          status?: string;
+          created_at?: Timestamptz;
+          updated_at?: Timestamptz;
+        };
+        Update: {
+          id?: Uuid;
+          curriculum_source_id?: Uuid;
+          parent_id?: Uuid | null;
+          node_type?: string;
+          title?: string;
+          normalized_title?: string;
+          position?: number;
+          page_start?: number | null;
+          page_end?: number | null;
+          metadata?: Json;
+          status?: string;
+          created_at?: Timestamptz;
+          updated_at?: Timestamptz;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<never, never>;
     Functions: {

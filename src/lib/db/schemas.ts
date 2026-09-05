@@ -5,6 +5,10 @@ import {
   assessmentStatusSchema,
   assessmentTypeSchema,
   conceptRelationshipTypeSchema,
+  curriculumNodeStatusSchema,
+  curriculumNodeTypeSchema,
+  curriculumSourceKindSchema,
+  curriculumSourceStatusSchema,
   documentStatusSchema,
   interactionRoleSchema,
   interactionTypeSchema,
@@ -200,6 +204,61 @@ export const createConceptRelationshipSchema = z
   });
 export type CreateConceptRelationshipInput = z.infer<
   typeof createConceptRelationshipSchema
+>;
+
+// ── Milestone 17.2: curriculum foundation ───────────────────────────────────
+// `owner_user_id` NULL = shared/global curriculum (e.g. NCERT); non-null =
+// private, owned by that user. See the migration header for why.
+export const createCurriculumSourceSchema = z.object({
+  ownerUserId: uuidSchema.nullish(),
+  kind: curriculumSourceKindSchema,
+  title: z.string().min(1).max(300),
+  status: curriculumSourceStatusSchema.default("DRAFT"),
+  version: z.string().max(60).nullish(),
+  metadata: metadataSchema.optional(),
+});
+export type CreateCurriculumSourceInput = z.infer<
+  typeof createCurriculumSourceSchema
+>;
+
+export const updateCurriculumSourceSchema = z.object({
+  id: uuidSchema,
+  title: z.string().min(1).max(300).optional(),
+  status: curriculumSourceStatusSchema.optional(),
+  version: z.string().max(60).nullish(),
+  metadata: metadataSchema.optional(),
+});
+export type UpdateCurriculumSourceInput = z.infer<
+  typeof updateCurriculumSourceSchema
+>;
+
+export const createCurriculumNodeSchema = z.object({
+  curriculumSourceId: uuidSchema,
+  parentId: uuidSchema.nullish(),
+  nodeType: curriculumNodeTypeSchema,
+  title: z.string().min(1).max(300),
+  normalizedTitle: z.string().min(1).max(300),
+  position: nonNegativeIntSchema.default(0),
+  pageStart: nonNegativeIntSchema.nullish(),
+  pageEnd: nonNegativeIntSchema.nullish(),
+  metadata: metadataSchema.optional(),
+  status: curriculumNodeStatusSchema.default("ACTIVE"),
+});
+export type CreateCurriculumNodeInput = z.infer<
+  typeof createCurriculumNodeSchema
+>;
+
+export const updateCurriculumNodeSchema = z.object({
+  id: uuidSchema,
+  title: z.string().min(1).max(300).optional(),
+  position: nonNegativeIntSchema.optional(),
+  pageStart: nonNegativeIntSchema.nullish(),
+  pageEnd: nonNegativeIntSchema.nullish(),
+  metadata: metadataSchema.optional(),
+  status: curriculumNodeStatusSchema.optional(),
+});
+export type UpdateCurriculumNodeInput = z.infer<
+  typeof updateCurriculumNodeSchema
 >;
 
 // ── assessments ─────────────────────────────────────────────────────────────
