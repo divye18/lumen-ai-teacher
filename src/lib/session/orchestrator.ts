@@ -1555,26 +1555,42 @@ export function createTeachingOrchestrator(
 
       // Persist the answer WITH the resulting mastery delta embedded, so the
       // mastery trajectory reads real evidence directly (no replay needed).
-      await qa.recordAnswer({
+      //
+      // `evaluation` (esp. a structured grader's `breakdown.items[].expected`)
+      // routinely carries real `undefined` values for "not applicable" fields
+      // — valid JS, but `jsonValueSchema` (a strict JSON value union) rejects
+      // any `undefined` anywhere in the tree. A JSON round-trip normalizes it
+      // to what it will become in the DB anyway (the key simply omitted) —
+      // no grading/orchestration behavior changes, only how it's serialized.
+      const answerWrite = await qa.recordAnswer({
         questionId: question.id,
         sessionId: data.session.id,
         userId: deps.userId,
         responseText: input.answerText,
         classification: evaluation.classification,
         correctnessScore: evaluation.correctnessScore,
-        evaluation: {
-          ...evaluation,
-          masteryDelta: {
-            before: outcome.delta.masteryBefore,
-            after: outcome.delta.masteryAfter,
-            delta: outcome.delta.masteryAfter - outcome.delta.masteryBefore,
-            reason: outcome.delta.reason,
-          },
-          questionFormat: question.question_format,
-          questionDifficulty: question.difficulty,
-        },
+        evaluation: JSON.parse(
+          JSON.stringify({
+            ...evaluation,
+            masteryDelta: {
+              before: outcome.delta.masteryBefore,
+              after: outcome.delta.masteryAfter,
+              delta: outcome.delta.masteryAfter - outcome.delta.masteryBefore,
+              reason: outcome.delta.reason,
+            },
+            questionFormat: question.question_format,
+            questionDifficulty: question.difficulty,
+          }),
+        ),
         responseTimeMs: input.responseTimeMs ?? null,
       });
+      if (!answerWrite.ok) {
+        return err(
+          new PersistenceError("failed to persist the student's answer", {
+            cause: answerWrite.error,
+          }),
+        );
+      }
 
       await interactions.record({
         sessionId: data.session.id,
