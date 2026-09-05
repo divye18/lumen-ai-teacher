@@ -1,0 +1,47 @@
+{
+  "datasetVersion": "2026-27.v1",
+  "source": {
+    "kind": "NCERT",
+    "class": "11",
+    "subject": "Physics",
+    "textbookVersion": "2026-27"
+  },
+  "chapters": [
+    {
+      "title": "Units and Measurement",
+      "position": 0,
+      "topics": [
+        {
+          "title": "Introduction",
+          "position": 0,
+          "subtopics": []
+        },
+        {
+          "title": "The International System of Units",
+          "position": 1,
+          "subtopics": []
+        },
+        {
+          "title": "Significant Figures",
+          "position": 2,
+          "subtopics": []
+        },
+        {
+          "title": "Dimensions of Physical Quantities",
+          "position": 3,
+          "subtopics": []
+        },
+        {
+          "title": "Dimensional Formulae and Dimensional Equations",
+          "position": 4,
+          "subtopics": []
+        },
+        {
+          "title": "Dimensional Analysis and its Applications",
+          "position": 5,
+          "subtopics": []
+        }
+      ]
+    }
+  ]
+}
