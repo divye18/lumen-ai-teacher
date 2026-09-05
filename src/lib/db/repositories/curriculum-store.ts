@@ -1,3 +1,4 @@
+import type { CurriculumSourceKind } from "@/lib/db/enums";
 import type { Json } from "@/lib/db/types";
 import { err, ok, type Result } from "@/lib/result";
 
@@ -39,6 +40,22 @@ export interface CurriculumStore {
   updateSource(
     input: UpdateCurriculumSourceInput,
   ): Promise<Result<CurriculumSourceRow>>;
+  /**
+   * Look up a source by its natural identity (owner + kind + version, then
+   * an exact match on the given `metadata` keys) — the same identity a
+   * deterministic re-import matches on. Returns `null` (not a NOT_FOUND
+   * error) when nothing matches, so a caller can use this directly as a
+   * "reuse or create" check, mirroring `findByNaturalKey` for nodes below.
+   * `metadataMatch` is checked client-side (no jsonb-path querying) since
+   * only one or two sources are ever expected per (ownerUserId, kind,
+   * version) combination.
+   */
+  findSourceByNaturalKey(input: {
+    ownerUserId: string | null;
+    kind: CurriculumSourceKind;
+    version: string;
+    metadataMatch: Record<string, string>;
+  }): Promise<Result<CurriculumSourceRow | null>>;
 
   createNode(
     input: CreateCurriculumNodeInput,
@@ -139,6 +156,29 @@ export function createCurriculumStore(db: DbClient): CurriculumStore {
           .select("*")
           .single(),
       );
+    },
+
+    async findSourceByNaturalKey(input) {
+      let query = db
+        .from("curriculum_sources")
+        .select("*")
+        .eq("kind", input.kind)
+        .eq("version", input.version);
+      query =
+        input.ownerUserId === null
+          ? query.is("owner_user_id", null)
+          : query.eq("owner_user_id", input.ownerUserId);
+
+      const res = await listResult(await query);
+      if (!res.ok) return res;
+
+      const match = res.value.find((row) => {
+        const metadata = (row.metadata ?? {}) as Record<string, unknown>;
+        return Object.entries(input.metadataMatch).every(
+          ([key, value]) => metadata[key] === value,
+        );
+      });
+      return ok(match ?? null);
     },
 
     async createNode(input) {
