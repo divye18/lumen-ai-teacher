@@ -29,6 +29,14 @@ export interface MisconceptionStore {
     conceptId: string,
   ): Promise<Result<MisconceptionRow[]>>;
   /**
+   * Misconceptions whose `session_id` is this session — i.e. NEWLY CREATED
+   * during it. `session_id` is stamped once, at creation, and never moves;
+   * a later strengthen/reinforcement in a DIFFERENT session does not appear
+   * here (see `misconception-tally.ts` for why that's a real, documented
+   * data-model limitation, not an oversight).
+   */
+  listCreatedInSession(sessionId: string): Promise<Result<MisconceptionRow[]>>;
+  /**
    * `metadataPatch`, when given, is merged into the existing `metadata`
    * jsonb (never replaces it) — used by the misconception resolution loop to
    * stamp `clearedChecks`/`lastVerifiedQuestionId` alongside the status.
@@ -149,6 +157,16 @@ export function createMisconceptionStore(db: DbClient): MisconceptionStore {
           .eq("user_id", userId)
           .eq("concept_id", conceptId)
           .order("last_detected_at", { ascending: false }),
+      );
+    },
+
+    async listCreatedInSession(sessionId) {
+      return listResult(
+        await db
+          .from("misconceptions")
+          .select("*")
+          .eq("session_id", sessionId)
+          .order("first_detected_at", { ascending: true }),
       );
     },
 

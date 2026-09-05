@@ -5,6 +5,7 @@ import {
   createInteractionStore,
   createLessonStore,
   createMasteryStore,
+  createMisconceptionStore,
   createSessionStore,
   createTeachingQaStore,
   type ClientTeachingQuestion,
@@ -29,6 +30,7 @@ import {
 import { buildRecommendation, type RecommendationView } from "./recommendation";
 import { tallyFromInteractions } from "./answer-tally";
 import { buildMasterySummary, type MasterySummary } from "./mastery-summary";
+import { tallyMisconceptionActivity } from "./misconception-tally";
 
 export interface ConceptOutcome {
   key: string;
@@ -113,6 +115,7 @@ export async function getSessionReport(
   const mastery = createMasteryStore(db);
   const documents = createDocumentStore(db);
   const interactions = createInteractionStore(db);
+  const misconceptions = createMisconceptionStore(db);
 
   const sessionRes = await sessions.get(sessionId);
   if (!sessionRes.ok) return sessionRes;
@@ -128,6 +131,7 @@ export async function getSessionReport(
     questionsRes,
     masteryRes,
     interactionsRes,
+    misconceptionsCreatedRes,
   ] = await Promise.all([
     lessons.get(session.lesson_id),
     lessons.listConcepts(session.lesson_id),
@@ -135,6 +139,7 @@ export async function getSessionReport(
     qa.listQuestionsForSession(sessionId),
     mastery.listForUser(userId),
     interactions.listForSession(sessionId, { limit: 200 }),
+    misconceptions.listCreatedInSession(sessionId),
   ]);
 
   const lesson = lessonRes.ok ? lessonRes.value : null;
@@ -144,6 +149,9 @@ export async function getSessionReport(
   const masteryRows = masteryRes.ok ? masteryRes.value : [];
   const masteryByConceptId = new Map(masteryRows.map((m) => [m.concept_id, m]));
   const sessionInteractions = interactionsRes.ok ? interactionsRes.value : [];
+  const misconceptionsCreatedThisSession = misconceptionsCreatedRes.ok
+    ? misconceptionsCreatedRes.value
+    : [];
 
   const snapshot =
     (session.mastery_snapshot as Record<string, unknown> | null) ?? {};
@@ -198,13 +206,20 @@ export async function getSessionReport(
     (c) => c.status === "COMPLETED",
   ).length;
 
-  // Misconceptions tied to this session's evaluations.
+  // Misconception ACTIVITY this session (creates + strengthens/reinforcements
+  // — not misconception ENTITIES). `candidateMentions` is the full signal,
+  // exactly as before; `sessionCreatedCount` (misconceptions.session_id,
+  // never dependent on teaching_answers) is a proven floor used only when
+  // the full signal would otherwise undercount. See misconception-tally.ts.
   const evalMisconceptions = answers.flatMap((a) => {
     const evaluation = a.evaluation as Record<string, unknown> | null;
     const cands = evaluation?.misconceptionCandidates;
     return Array.isArray(cands) ? cands : [];
   });
-  const misconceptionsIdentified = evalMisconceptions.length;
+  const misconceptionsIdentified = tallyMisconceptionActivity({
+    candidateMentions: evalMisconceptions,
+    sessionCreatedCount: misconceptionsCreatedThisSession.length,
+  }).count;
   const repeatedFromSnapshot = Object.entries(snapshot).filter(
     ([k, v]) =>
       k !== "__baseline" &&
