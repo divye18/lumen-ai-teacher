@@ -2009,38 +2009,48 @@ export function createTeachingOrchestrator(
         gap = null;
       }
 
-      // CONCURRENCY GUARD: atomically claim this diagnostic (IN_PROGRESS ->
-      // COMPLETED) BEFORE writing any mastery. `assessments.complete`'s
-      // `expectedCurrentStatus` makes this a compare-and-swap on the DB row —
-      // two racing submissions of the same final question (double-click,
-      // retry-after-timeout) can both reach this point, but only one UPDATE
-      // matches a still-IN_PROGRESS row. The loser sees `!claim.ok` and backs
-      // out without touching mastery, never double-writing it.
       const now = new Date().toISOString();
-      const claim = await assessments.complete({
-        id: stored.assessmentId,
-        status: "COMPLETED",
-        score:
-          result.strongConceptKeys.length +
-          result.developingConceptKeys.length * 0.5,
-        maxScore: set.items.length,
-        completedAt: now,
-        expectedCurrentStatus: "IN_PROGRESS",
+      const completedState = markDiagnosticCompleted(stored, result, gap, now);
+
+      // CONCURRENCY GUARD: atomically claim-AND-write this diagnostic's
+      // final content (current_action: "DIAGNOSTIC" -> "DIAGNOSTIC_SUMMARY",
+      // mastery_snapshot.__diagnostic -> the real completed summary) in a
+      // SINGLE conditional update, BEFORE writing any mastery. Two racing
+      // submissions of the same final question (double-click, retry racing
+      // an in-flight request) can both reach this point, but only one UPDATE
+      // matches a still-"DIAGNOSTIC" row.
+      //
+      // Earlier revision gated only on the `assessments` row and wrote the
+      // session's summary in a LATER, separate call — live testing against
+      // a real database showed the loser could re-read the session in the
+      // gap between those two writes and see a stale/empty summary. Doing
+      // the claim and the content write as ONE query removes that window:
+      // the instant any caller can observe the claim outcome, the winner's
+      // full content is already there to read.
+      const claim = await sessions.updateTeaching({
+        id: session.id,
+        currentAction: "DIAGNOSTIC_SUMMARY",
+        masterySnapshot: { ...snap, __diagnostic: completedState },
+        expectedCurrentAction: "DIAGNOSTIC",
       });
       if (!claim.ok) {
-        // Lost the race — re-read the session so the response reflects the
-        // winner's completed state, not this request's (unwritten) result.
+        // Lost the race — the winner's write already committed, so this
+        // fresh read is guaranteed to see its complete summary, not a
+        // half-written intermediate state.
         const freshRes = await sessions.get(input.sessionId);
         const freshSession = freshRes.ok ? freshRes.value : session;
-        const freshSnap =
+        const freshMasterySnap =
           (freshSession.mastery_snapshot as Record<string, unknown> | null) ??
           {};
-        const freshStored = parseStoredDiagnosticState(freshSnap.__diagnostic);
+        const freshStored = parseStoredDiagnosticState(
+          freshMasterySnap.__diagnostic,
+        );
         return ok(
           alreadyCompletedDiagnosticResult(freshSession.id, freshStored),
         );
       }
 
+      // Only the winner reaches here — safe to write mastery exclusively.
       // Never routed through applyInteractionOutcome — diagnostic evidence
       // never touches ordinary teaching-interaction bookkeeping and never
       // creates/strengthens a confirmed misconception.
@@ -2057,13 +2067,16 @@ export function createTeachingOrchestrator(
         await mastery.upsert(upsertInput);
       }
 
-      const completedState = markDiagnosticCompleted(stored, result, gap, now);
-      await sessions.updateTeaching({
-        id: session.id,
-        // Not cleared to null yet — the learner still needs to see and
-        // acknowledge the summary; see the idempotent-replay branch above.
-        currentAction: "DIAGNOSTIC_SUMMARY",
-        masterySnapshot: { ...snap, __diagnostic: completedState },
+      // Best-effort audit record — the claim above is what actually gates
+      // correctness; this just keeps the `assessments` envelope in sync.
+      await assessments.complete({
+        id: stored.assessmentId,
+        status: "COMPLETED",
+        score:
+          result.strongConceptKeys.length +
+          result.developingConceptKeys.length * 0.5,
+        maxScore: set.items.length,
+        completedAt: now,
       });
 
       return ok({

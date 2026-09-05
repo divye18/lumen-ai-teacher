@@ -123,12 +123,15 @@ export function createSessionStore(db: DbClient): SessionStore {
         ...(rest.endedAt !== undefined && { ended_at: rest.endedAt }),
       };
 
-      const res = await db
-        .from("learning_sessions")
-        .update(patch)
-        .eq("id", id)
-        .select("*")
-        .single();
+      let query = db.from("learning_sessions").update(patch).eq("id", id);
+      if (rest.expectedCurrentAction !== undefined) {
+        query =
+          rest.expectedCurrentAction === null
+            ? query.is("current_action", null)
+            : query.eq("current_action", rest.expectedCurrentAction);
+      }
+
+      const res = await query.select("*").single();
       return rowResult(res);
     },
   };

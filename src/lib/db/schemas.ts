@@ -408,6 +408,16 @@ export const updateSessionTeachingSchema = z.object({
   masterySnapshot: jsonValueSchema.optional(),
   startedAt: isoDateTimeSchema.nullish(),
   endedAt: isoDateTimeSchema.nullish(),
+  /**
+   * Compare-and-swap guard: when set, the update only applies to a row whose
+   * CURRENT `current_action` still matches this value (`WHERE id = ... AND
+   * current_action = ...`). Lets a caller atomically claim-and-write a row
+   * exactly once under concurrent requests — a losing racer's update matches
+   * zero rows (`NOT_FOUND`) instead of silently racing a second write, and
+   * critically, the WINNER's full content (not just a status flag) is
+   * guaranteed visible the moment any caller can observe the claim outcome.
+   */
+  expectedCurrentAction: z.string().max(60).nullish(),
 });
 export type UpdateSessionTeachingInput = z.infer<
   typeof updateSessionTeachingSchema
