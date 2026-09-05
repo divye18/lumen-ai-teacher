@@ -36,6 +36,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { Database } from "@/lib/db/types";
 import {
+  createInteractionStore,
   createMisconceptionStore,
   createTeachingQaStore,
 } from "@/lib/db/repositories";
@@ -319,6 +320,41 @@ describe.skipIf(!ready)("teaching room loop (integration)", () => {
       );
       expect(persisted).toBeDefined();
       expect(persisted?.classification).toBe("CORRECT");
+    }
+
+    // Data-integrity audit (12.5): confirm the classification + raw answer
+    // text are ALSO independently recoverable from `interactions` — the
+    // STUDENT/ANSWER + TEACHER/FEEDBACK rows never touch the risky nested
+    // `evaluation.breakdown` object that caused the 12.4 bug, so even a
+    // hypothetical future `teaching_answers` gap would not lose this data.
+    const interactions = createInteractionStore(client);
+    const turnInteractions = await interactions.listForSession(sessionId, {
+      limit: 50,
+    });
+    expect(turnInteractions.ok).toBe(true);
+    if (turnInteractions.ok) {
+      const studentAnswer = turnInteractions.value.find(
+        (i) =>
+          i.role === "STUDENT" &&
+          i.interaction_type === "ANSWER" &&
+          (i.metadata as Record<string, unknown> | null)?.questionId ===
+            first.questionId,
+      );
+      expect(studentAnswer).toBeDefined();
+      expect(studentAnswer?.content).toBe(
+        JSON.stringify(correctAnswerFor(first.question)),
+      );
+
+      const teacherFeedback = turnInteractions.value.find(
+        (i) =>
+          i.role === "TEACHER" &&
+          i.interaction_type === "FEEDBACK" &&
+          (i.metadata as Record<string, unknown> | null)?.classification ===
+            "CORRECT" &&
+          (i.metadata as Record<string, unknown> | null)?.conceptKey ===
+            first.conceptKey,
+      );
+      expect(teacherFeedback).toBeDefined();
     }
 
     // ── Turn 2: a deliberately WRONG answer ─────────────────────────────
