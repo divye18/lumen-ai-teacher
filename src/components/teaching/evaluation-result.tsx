@@ -151,7 +151,7 @@ export function EvaluationResult({
         ) : evaluation.misconceptionInsight ? (
           <div className="mt-3 rounded-[var(--radius-md)] border border-[color-mix(in_oklab,var(--color-warning)_30%,transparent)] bg-[color-mix(in_oklab,var(--color-warning)_7%,transparent)] p-3.5">
             <p className="text-[10px] font-semibold tracking-wider text-[var(--color-warning)] uppercase">
-              Lumen noticed a pattern
+              Worth double-checking
             </p>
             <p className="mt-1.5 text-[13px] leading-relaxed text-[var(--color-ink)]">
               {evaluation.misconceptionInsight.explanation}

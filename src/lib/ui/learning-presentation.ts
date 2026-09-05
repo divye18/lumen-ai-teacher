@@ -141,6 +141,26 @@ export function questionKindLabel(kind: string): string {
   }
 }
 
+/** Human label for `LiveStatusView.state` (chip in the Teaching Room header). */
+export function liveStatusLabel(state: string): string {
+  switch (state) {
+    case "MASTERED":
+      return "Mastered";
+    case "READY":
+      return "Ready to advance";
+    case "RECOVERING":
+      return "Recovering";
+    case "STUCK":
+      return "Working through it";
+    case "DEVELOPING":
+      return "Developing";
+    case "FORMING":
+      return "Getting started";
+    default:
+      return actionLabel(state);
+  }
+}
+
 export type ClassificationTone =
   "correct" | "partial" | "incorrect" | "uncertain";
 

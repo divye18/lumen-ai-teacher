@@ -36,7 +36,7 @@ import type { TimelineConcept } from "@/components/learning/session-timeline";
 import type { KnowledgeGraphView } from "@/lib/graph";
 import type { VisualDirective } from "@/lib/visuals";
 import { apiFetch } from "@/lib/ui/api-client";
-import { actionLabel } from "@/lib/ui/learning-presentation";
+import { actionLabel, liveStatusLabel } from "@/lib/ui/learning-presentation";
 import { buildSessionEvents } from "@/lib/ui/session-events";
 import { deriveTeachingStage } from "@/lib/teaching/teaching-stage";
 import {
@@ -921,7 +921,7 @@ function TeachingTopBar({
           <span className="hidden items-center gap-1.5 text-[11px] text-[var(--color-ink-faint)] lg:flex">
             <span className="h-1 w-1 rounded-full bg-[var(--color-accent)]" />
             <span className="font-medium text-[var(--color-ink-muted)]">
-              {liveStatus.state}
+              {liveStatusLabel(liveStatus.state)}
             </span>
             <span aria-hidden>
               {liveStatus.momentum === "up"
