@@ -41,6 +41,7 @@ import {
   createTeachingQaStore,
 } from "@/lib/db/repositories";
 import { ensureDemoSession } from "@/lib/demo";
+import { getSessionReport } from "@/lib/studio/session-report";
 import {
   structuredQuestionFromRow,
   type StructuredAnswer,
@@ -401,6 +402,20 @@ describe.skipIf(!ready)("teaching room loop (integration)", () => {
       expect(resumed.value.diagnostic).toBeNull();
       expect(resumed.value.diagnosticSummary).toBeNull();
       expect(resumed.value.status).not.toBe("COMPLETED");
+    }
+
+    // Milestone 13.1: the session report's answer tally (now derived from
+    // `interactions`, not `teaching_answers` — see answer-tally.ts) must
+    // exactly match the two real turns above: one correct, one incorrect,
+    // with no double-counting.
+    const report = await getSessionReport(client, user.id, sessionId);
+    expect(report.ok).toBe(true);
+    if (report.ok) {
+      expect(report.value.questionsAnswered).toBe(2);
+      expect(report.value.correct).toBe(1);
+      expect(report.value.incorrect).toBe(1);
+      expect(report.value.partial).toBe(0);
+      expect(report.value.masterySummary).toBeDefined();
     }
   }, 90_000);
 

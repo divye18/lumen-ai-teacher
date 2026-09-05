@@ -10,7 +10,35 @@ import { LumenMark } from "@/components/ui/lumen-mark";
 import { KnowledgeGraphPanel } from "@/components/graph/knowledge-graph-panel";
 import { MasteryTrajectoryChart } from "@/components/learning/mastery-trajectory";
 import type { SessionReport } from "@/lib/studio/session-report";
+import type { MasterySummaryConcept } from "@/lib/studio/mastery-summary";
 import { cn } from "@/lib/ui/cn";
+
+/** One "Strong" / "Developing" / "Needs work" row — renders nothing when empty. */
+function MasteryGroup({
+  label,
+  tone,
+  concepts,
+}: {
+  label: string;
+  tone: "positive" | "warning";
+  concepts: MasterySummaryConcept[];
+}) {
+  if (concepts.length === 0) return null;
+  return (
+    <div>
+      <p className="text-[11px] font-medium text-[var(--color-ink-faint)]">
+        {label}
+      </p>
+      <div className="mt-1.5 flex flex-wrap gap-1.5">
+        {concepts.map((c) => (
+          <Badge key={c.key} tone={tone}>
+            {c.title}
+          </Badge>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export function SessionCompleteView({ report }: { report: SessionReport }) {
   const reduce = useReducedMotion();
@@ -71,6 +99,33 @@ export function SessionCompleteView({ report }: { report: SessionReport }) {
           </motion.div>
         ))}
       </div>
+
+      {report.masterySummary.strong.length > 0 ||
+      report.masterySummary.developing.length > 0 ||
+      report.masterySummary.needsWork.length > 0 ? (
+        <Panel inset>
+          <p className="text-[11px] font-medium tracking-wide text-[var(--color-ink-faint)] uppercase">
+            Where you stand
+          </p>
+          <div className="mt-4 flex flex-col gap-4">
+            <MasteryGroup
+              label="Strong"
+              tone="positive"
+              concepts={report.masterySummary.strong}
+            />
+            <MasteryGroup
+              label="Developing"
+              tone="warning"
+              concepts={report.masterySummary.developing}
+            />
+            <MasteryGroup
+              label="Needs work"
+              tone="warning"
+              concepts={report.masterySummary.needsWork}
+            />
+          </div>
+        </Panel>
+      ) : null}
 
       {report.outcomes.length > 0 ? (
         <Panel inset>

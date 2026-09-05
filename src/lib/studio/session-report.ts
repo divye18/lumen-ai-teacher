@@ -27,6 +27,8 @@ import {
   type MasteryTrajectory,
 } from "./mastery-trajectory";
 import { buildRecommendation, type RecommendationView } from "./recommendation";
+import { tallyFromInteractions } from "./answer-tally";
+import { buildMasterySummary, type MasterySummary } from "./mastery-summary";
 
 export interface ConceptOutcome {
   key: string;
@@ -36,6 +38,14 @@ export interface ConceptOutcome {
   delta: number;
   band: string;
 }
+
+/**
+ * `questionsAnswered`/`correct`/`partial`/`incorrect` are derived from
+ * `interactions` (STUDENT/ANSWER + TEACHER/FEEDBACK), not `teaching_answers`
+ * — see `answer-tally.ts` for why. `teaching_answers` remains the source for
+ * everything that needs the FULL graded detail (`trajectories`, per-question
+ * breakdown) that only it carries.
+ */
 
 export interface SessionReport {
   sessionId: string;
@@ -84,6 +94,8 @@ export interface SessionReport {
   graph: KnowledgeGraphView;
   /** Real per-concept mastery trajectories from this session's answers. */
   trajectories: MasteryTrajectory[];
+  /** Concepts grouped strong / developing / needs-work by current mastery. */
+  masterySummary: MasterySummary;
 }
 
 function jsonNum(v: unknown): number | null {
@@ -109,14 +121,21 @@ export async function getSessionReport(
     return err(new SessionNotFoundError(sessionId));
   }
 
-  const [lessonRes, conceptsRes, answersRes, questionsRes, masteryRes] =
-    await Promise.all([
-      lessons.get(session.lesson_id),
-      lessons.listConcepts(session.lesson_id),
-      qa.listAnswersForSession(sessionId),
-      qa.listQuestionsForSession(sessionId),
-      mastery.listForUser(userId),
-    ]);
+  const [
+    lessonRes,
+    conceptsRes,
+    answersRes,
+    questionsRes,
+    masteryRes,
+    interactionsRes,
+  ] = await Promise.all([
+    lessons.get(session.lesson_id),
+    lessons.listConcepts(session.lesson_id),
+    qa.listAnswersForSession(sessionId),
+    qa.listQuestionsForSession(sessionId),
+    mastery.listForUser(userId),
+    interactions.listForSession(sessionId, { limit: 200 }),
+  ]);
 
   const lesson = lessonRes.ok ? lessonRes.value : null;
   const lessonConcepts = conceptsRes.ok ? conceptsRes.value : [];
@@ -124,6 +143,7 @@ export async function getSessionReport(
   const questions = questionsRes.ok ? questionsRes.value : [];
   const masteryRows = masteryRes.ok ? masteryRes.value : [];
   const masteryByConceptId = new Map(masteryRows.map((m) => [m.concept_id, m]));
+  const sessionInteractions = interactionsRes.ok ? interactionsRes.value : [];
 
   const snapshot =
     (session.mastery_snapshot as Record<string, unknown> | null) ?? {};
@@ -132,10 +152,19 @@ export async function getSessionReport(
   // even after the shared per-user concept mastery moves in a later session.
   const ending = (snapshot.__ending as Record<string, number> | null) ?? null;
 
+  // Authoritative tally from `interactions` (see answer-tally.ts) — NOT
+  // `teaching_answers`, which historical rows may be missing from. Concept
+  // ids are mapped to this lesson's concept KEYS via lessonConcepts.
+  const answerTally = tallyFromInteractions(sessionInteractions);
+  const conceptKeyByConceptId = new Map(
+    lessonConcepts
+      .filter((c) => c.concept_id)
+      .map((c) => [c.concept_id as string, c.concept_key]),
+  );
   const answeredConceptKeys = new Set(
-    questions
-      .filter((q) => answers.some((a) => a.question_id === q.id))
-      .map((q) => q.concept_key),
+    [...answerTally.answeredConceptIds]
+      .map((id) => conceptKeyByConceptId.get(id))
+      .filter((key): key is string => Boolean(key)),
   );
 
   const outcomes: ConceptOutcome[] = lessonConcepts
@@ -157,14 +186,7 @@ export async function getSessionReport(
       };
     });
 
-  const questionsAnswered = answers.length;
-  const correct = answers.filter((a) => a.classification === "CORRECT").length;
-  const partial = answers.filter(
-    (a) => a.classification === "PARTIALLY_CORRECT",
-  ).length;
-  const incorrect = answers.filter(
-    (a) => a.classification === "INCORRECT",
-  ).length;
+  const { questionsAnswered, correct, partial, incorrect } = answerTally;
 
   const movements = outcomes.map((o) => o.delta);
   const averageMasteryMovement =
@@ -209,9 +231,8 @@ export async function getSessionReport(
     repeated: repeatedFromSnapshot,
   });
 
-  const [docRes, interactionsRes, graphRes] = await Promise.all([
+  const [docRes, graphRes] = await Promise.all([
     documents.listForUser(userId),
-    interactions.listForSession(sessionId, { limit: 200 }),
     getKnowledgeGraph(db, userId, { lessonId: session.lesson_id }),
   ]);
 
@@ -232,7 +253,6 @@ export async function getSessionReport(
   };
   const graph = graphRes.ok ? graphRes.value : emptyGraph;
 
-  const sessionInteractions = interactionsRes.ok ? interactionsRes.value : [];
   const strategyMemory = buildStrategyMemory({
     interactions: sessionInteractions,
     answers,
@@ -391,6 +411,13 @@ export async function getSessionReport(
         }),
       )
       .filter((t) => t.points.length > 0),
+    masterySummary: buildMasterySummary(
+      outcomes.map((o) => ({
+        key: o.key,
+        title: o.title,
+        masteryPoints: o.masteryAfter,
+      })),
+    ),
   });
 }
 
