@@ -11,7 +11,11 @@ export function Panel({
   return (
     <div
       className={cn(
-        "rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)]",
+        // Milestone 19.1 — a subtle default shadow so panels read as
+        // slightly-lifted learning objects rather than flat containers.
+        // Deliberately the smallest step (`shadow-xs`) — no large shadows,
+        // no glassmorphism, per the visual-system brief.
+        "rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-xs)]",
         inset ? "p-5 sm:p-6" : "",
         className,
       )}

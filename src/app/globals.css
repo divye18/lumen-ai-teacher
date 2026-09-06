@@ -22,6 +22,10 @@
   --color-canvas: #fbfbfa;
   --color-surface: #ffffff;
   --color-surface-raised: #ffffff;
+  /* Milestone 19.1: a further elevation step above `surface` (menus, popovers,
+     selected/active cards) — aliases `surface-raised` rather than introducing
+     a third near-identical hex, since nothing referenced that token before. */
+  --color-surface-elevated: var(--color-surface-raised);
   --color-subtle: #f3f3f1;
   --color-ink: #191917;
   --color-ink-muted: #6b6a67;
@@ -32,6 +36,30 @@
   --color-accent: #5b4be6;
   --color-accent-soft: #ece9fe;
   --color-accent-contrast: #ffffff;
+  /* `primary` names the same identity color for call sites that want the
+     semantic role rather than the "accent" name specifically. */
+  --color-primary: var(--color-accent);
+  --color-success: var(--color-positive);
+
+  /* Milestone 19.1 — mode-identity accents. Semantic accents layered on top
+     of the neutral+violet foundation, not a second palette: every other
+     token (surfaces, ink, borders) stays exactly as before. `learning`
+     covers VISUALIZE/3D/VOICE ("explain-adjacent" modes); `practice` covers
+     structured-question/practice surfaces. Deliberately reuses the existing
+     cyan/orange hue families already established by the band/signal tokens
+     below, rather than introducing unrelated new hues. */
+  --color-learning: #0e7490;
+  --color-learning-soft: color-mix(
+    in oklab,
+    var(--color-learning) 12%,
+    var(--color-surface)
+  );
+  --color-practice: #c2401f;
+  --color-practice-soft: color-mix(
+    in oklab,
+    var(--color-practice) 12%,
+    var(--color-surface)
+  );
 
   --color-band-unknown: #a1a09b;
   --color-band-emerging: #c2620d;
@@ -54,12 +82,22 @@
   --shadow-md:
     0 4px 12px -2px rgb(0 0 0 / 0.08), 0 2px 6px -2px rgb(0 0 0 / 0.05);
   --shadow-lg: 0 16px 48px -12px rgb(0 0 0 / 0.14);
+
+  /* Milestone 19.1 — a documented typography scale for 19.2+ screens to
+     adopt. Not applied anywhere yet: existing literal `text-[13px]`-style
+     call sites are untouched. Font family/weight stack is unchanged. */
+  --text-display: 1.75rem;
+  --text-title: 1.25rem;
+  --text-subtitle: 0.9375rem;
+  --text-body: 0.875rem;
+  --text-meta: 0.75rem;
 }
 
 .dark {
   --color-canvas: #0a0a0b;
   --color-surface: #131315;
   --color-surface-raised: #1a1a1d;
+  --color-surface-elevated: var(--color-surface-raised);
   --color-subtle: #1c1c1f;
   --color-ink: #ededec;
   --color-ink-muted: #9b9a97;
@@ -70,6 +108,21 @@
   --color-accent: #8b7dff;
   --color-accent-soft: #221f3d;
   --color-accent-contrast: #0a0a0b;
+  --color-primary: var(--color-accent);
+  --color-success: var(--color-positive);
+
+  --color-learning: #22d3ee;
+  --color-learning-soft: color-mix(
+    in oklab,
+    var(--color-learning) 14%,
+    var(--color-surface)
+  );
+  --color-practice: #ff8a68;
+  --color-practice-soft: color-mix(
+    in oklab,
+    var(--color-practice) 14%,
+    var(--color-surface)
+  );
 
   --color-band-unknown: #7d7c78;
   --color-band-emerging: #e08b3a;

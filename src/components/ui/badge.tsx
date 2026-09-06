@@ -10,7 +10,14 @@ export function Badge({
   children,
   ...props
 }: HTMLAttributes<HTMLSpanElement> & {
-  tone?: "neutral" | "accent" | "positive" | "warning" | "danger";
+  tone?:
+    | "neutral"
+    | "accent"
+    | "positive"
+    | "warning"
+    | "danger"
+    | "learning"
+    | "practice";
   dot?: boolean;
   /** Explicit CSS color for the dot / text (overrides tone). */
   color?: string;
@@ -26,6 +33,12 @@ export function Badge({
       "text-[var(--color-warning)] border-[color-mix(in_oklab,var(--color-warning)_30%,transparent)] bg-[color-mix(in_oklab,var(--color-warning)_10%,transparent)]",
     danger:
       "text-[var(--color-danger)] border-[color-mix(in_oklab,var(--color-danger)_30%,transparent)] bg-[color-mix(in_oklab,var(--color-danger)_10%,transparent)]",
+    // Milestone 19.1 — mode-identity tones. Same shape as the existing
+    // tones (tinted border + soft background), never a solid fill.
+    learning:
+      "text-[var(--color-learning)] border-[color-mix(in_oklab,var(--color-learning)_30%,transparent)] bg-[var(--color-learning-soft)]",
+    practice:
+      "text-[var(--color-practice)] border-[color-mix(in_oklab,var(--color-practice)_30%,transparent)] bg-[var(--color-practice-soft)]",
   };
   return (
     <span

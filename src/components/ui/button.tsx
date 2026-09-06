@@ -27,9 +27,13 @@ const SIZES: Record<Size, string> = {
 };
 
 const base = cn(
-  "inline-flex select-none items-center justify-center whitespace-nowrap font-medium transition-[background-color,filter,box-shadow] duration-150",
+  "inline-flex select-none items-center justify-center whitespace-nowrap font-medium transition-[background-color,filter,box-shadow,transform] duration-150",
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]",
   "disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50",
+  // Milestone 19.1 — tactile press feedback. CSS-only (no Framer Motion
+  // dependency added to this component); respects prefers-reduced-motion via
+  // the existing global media-query override on `transition-duration`.
+  "active:scale-[0.98]",
 );
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
