@@ -1,6 +1,7 @@
 import "server-only";
 
 import type {
+  CurriculumNodeRow,
   CurriculumStore,
   LessonRow,
   LessonStore,
@@ -41,6 +42,8 @@ export type TopicStatus = "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED";
 
 export interface TopicProgress {
   nodeId: string;
+  title: string;
+  position: number;
   status: TopicStatus;
 }
 
@@ -88,6 +91,22 @@ export async function getTopicProgressForUser(
     .filter((n) => n.node_type === "TOPIC" && n.status === "ACTIVE")
     .sort((a, b) => a.position - b.position);
 
+  return getTopicProgressForNodes(lessons, userId, topics);
+}
+
+/**
+ * Shared core: given an already-resolved, already-filtered list of TOPIC
+ * nodes (in the caller's desired order), return each one's progress. Used
+ * by `getTopicProgressForUser` (whole-source scope) and by
+ * `chapter-progress.ts` (single-chapter scope) so the lesson-fetch/group/
+ * reduce logic is written exactly once. Exactly one query regardless of
+ * topic count.
+ */
+export async function getTopicProgressForNodes(
+  lessons: LessonStore,
+  userId: string,
+  topics: CurriculumNodeRow[],
+): Promise<Result<TopicProgress[]>> {
   const nodeIds = topics.map((t) => t.id);
   const lessonsRes = await lessons.listForUserByCurriculumNodes(
     userId,
@@ -111,7 +130,12 @@ export async function getTopicProgressForUser(
       const statuses = matching.map((l) => ({
         status: l.status as LessonStatus,
       }));
-      return { nodeId: topic.id, status: reduceLessonsToTopicStatus(statuses) };
+      return {
+        nodeId: topic.id,
+        title: topic.title,
+        position: topic.position,
+        status: reduceLessonsToTopicStatus(statuses),
+      };
     }),
   );
 }
