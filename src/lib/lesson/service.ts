@@ -41,6 +41,10 @@ export interface CreateLessonInput {
   timeBudgetMinutes?: number | null;
   teachingStyle?: TeachingStyle | null;
   retrievalTopK?: number;
+  /** Optional provenance — a validated global curriculum TOPIC node id
+   * (see `resolveLessonCurriculumNode`). Callers must validate this
+   * themselves before calling; this function only persists it. */
+  curriculumNodeId?: string | null;
 }
 
 export interface CreateLessonDeps {
@@ -162,6 +166,7 @@ export async function createLessonForUser(
   const lessonRes = await lessons.create({
     userId: deps.userId,
     documentId: input.documentId ?? null,
+    curriculumNodeId: input.curriculumNodeId ?? null,
     title: `${input.topic}`,
     topic: input.topic,
     objective: plan.objective,

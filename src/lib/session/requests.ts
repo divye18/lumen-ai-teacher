@@ -12,6 +12,11 @@ export const createLessonRequestSchema = z.object({
   documentId: uuidSchema.nullish(),
   timeBudgetMinutes: z.number().int().min(1).max(600).nullish(),
   teachingStyle: teachingStyleSchema.nullish(),
+  /** Optional provenance: a global curriculum TOPIC node (e.g. from the
+   * NCERT Curriculum Explorer) this lesson was started from. Validated
+   * server-side in the route handler — never trusted as-is. Absent for
+   * every existing free-text Studio lesson. */
+  curriculumNodeId: uuidSchema.nullish(),
 });
 export type CreateLessonRequest = z.infer<typeof createLessonRequestSchema>;
 

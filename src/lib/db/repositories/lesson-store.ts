@@ -48,6 +48,7 @@ export function createLessonStore(db: DbClient): LessonStore {
       const payload: TablesInsert<"lessons"> = {
         user_id: v.userId,
         document_id: v.documentId ?? null,
+        curriculum_node_id: v.curriculumNodeId ?? null,
         title: v.title,
         topic: v.topic,
         objective: v.objective,

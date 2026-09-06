@@ -29,6 +29,8 @@ import {
   createLessonStore,
 } from "@/lib/db/repositories";
 import type { Database } from "@/lib/db/types";
+import { createLessonForUser } from "@/lib/lesson/service";
+import { resolveLessonCurriculumNode } from "@/lib/curriculum/validate-lesson-node";
 
 const url = process.env.LUMEN_TEST_SUPABASE_URL;
 const anonKey = process.env.LUMEN_TEST_SUPABASE_ANON_KEY;
@@ -243,3 +245,177 @@ describe.skipIf(!ready)("lessons.curriculum_node_id (integration)", () => {
     }
   });
 });
+
+/**
+ * Milestone 18.3b — threading `curriculumNodeId` through the real
+ * `createLessonForUser`/`resolveLessonCurriculumNode` path (not a raw admin
+ * insert, unlike the 18.3a suite above). A separate ephemeral
+ * users/source/node set, fully independent of the 18.3a suite's node
+ * (which that suite deletes as part of its own ON DELETE SET NULL test).
+ */
+describe.skipIf(!ready)(
+  "lesson provenance threading (18.3b, integration)",
+  () => {
+    let admin: ReturnType<typeof createClient<Database>>;
+    const testId = randomUUID().slice(0, 8);
+
+    const userA = {
+      email: `lumen-provenance-b-a-${testId}@example.test`,
+      password: randomUUID(),
+      id: "",
+      client: null as unknown as ReturnType<typeof createClient<Database>>,
+    };
+    /** Owns a PRIVATE curriculum source — used for the security test. */
+    const userB = {
+      email: `lumen-provenance-b-b-${testId}@example.test`,
+      password: randomUUID(),
+      id: "",
+      client: null as unknown as ReturnType<typeof createClient<Database>>,
+    };
+
+    let globalSourceId = "";
+    let topicNodeId = "";
+    let privateSourceId = "";
+    let privateNodeId = "";
+    const createdLessonIds: string[] = [];
+
+    beforeAll(async () => {
+      admin = createClient<Database>(url as string, serviceKey as string);
+
+      for (const user of [userA, userB]) {
+        const created = await admin.auth.admin.createUser({
+          email: user.email,
+          password: user.password,
+          email_confirm: true,
+        });
+        if (created.error) throw created.error;
+        user.id = created.data.user.id;
+
+        user.client = createClient<Database>(url as string, anonKey as string);
+        const signIn = await user.client.auth.signInWithPassword({
+          email: user.email,
+          password: user.password,
+        });
+        if (signIn.error) throw signIn.error;
+      }
+
+      const curriculum = createCurriculumStore(admin);
+
+      const globalSource = await curriculum.createSource({
+        kind: "NCERT",
+        title: `Test 18.3b global source ${testId}`,
+        status: "READY",
+        version: `test-18.3b-${testId}`,
+      });
+      if (!globalSource.ok) throw globalSource.error;
+      globalSourceId = globalSource.value.id;
+
+      const topicNode = await curriculum.createNode({
+        curriculumSourceId: globalSourceId,
+        nodeType: "TOPIC",
+        title: "Introduction",
+        normalizedTitle: "introduction",
+        position: 0,
+        status: "ACTIVE",
+      });
+      if (!topicNode.ok) throw topicNode.error;
+      topicNodeId = topicNode.value.id;
+
+      // userB's own PRIVATE source + a TOPIC node under it — used to prove
+      // userA cannot reference it even by guessing/submitting its real id.
+      const privateSource = await curriculum.createSource({
+        ownerUserId: userB.id,
+        kind: "USER_UPLOAD",
+        title: "userB's private curriculum",
+        status: "READY",
+      });
+      if (!privateSource.ok) throw privateSource.error;
+      privateSourceId = privateSource.value.id;
+
+      const privateNode = await curriculum.createNode({
+        curriculumSourceId: privateSourceId,
+        nodeType: "TOPIC",
+        title: "Private Topic",
+        normalizedTitle: "private topic",
+        position: 0,
+        status: "ACTIVE",
+      });
+      if (!privateNode.ok) throw privateNode.error;
+      privateNodeId = privateNode.value.id;
+    }, 30_000);
+
+    afterAll(async () => {
+      if (createdLessonIds.length > 0) {
+        await admin.from("lessons").delete().in("id", createdLessonIds);
+      }
+      if (globalSourceId) {
+        await admin
+          .from("curriculum_sources")
+          .delete()
+          .eq("id", globalSourceId);
+      }
+      if (privateSourceId) {
+        await admin
+          .from("curriculum_sources")
+          .delete()
+          .eq("id", privateSourceId);
+      }
+      if (userA.id) await admin.auth.admin.deleteUser(userA.id);
+      if (userB.id) await admin.auth.admin.deleteUser(userB.id);
+    });
+
+    it("A. free-text lesson creation (no curriculumNodeId) still results in curriculum_node_id = NULL", async () => {
+      const result = await createLessonForUser(
+        { db: userA.client, llm: null, retriever: null, userId: userA.id },
+        { topic: "Newton's Laws" },
+      );
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      createdLessonIds.push(result.value.lessonId);
+
+      const row = await admin
+        .from("lessons")
+        .select("curriculum_node_id")
+        .eq("id", result.value.lessonId)
+        .single();
+      expect(row.data?.curriculum_node_id).toBeNull();
+    });
+
+    it("B/G. a validated curriculumNodeId is persisted exactly onto the created lesson", async () => {
+      const store = createCurriculumStore(userA.client);
+      const resolved = await resolveLessonCurriculumNode(store, topicNodeId);
+      expect(resolved.ok).toBe(true);
+      if (!resolved.ok) return;
+
+      const result = await createLessonForUser(
+        { db: userA.client, llm: null, retriever: null, userId: userA.id },
+        {
+          topic: "Units and Measurement — Introduction",
+          curriculumNodeId: resolved.value,
+        },
+      );
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      createdLessonIds.push(result.value.lessonId);
+
+      const row = await admin
+        .from("lessons")
+        .select("curriculum_node_id, topic, title")
+        .eq("id", result.value.lessonId)
+        .single();
+      expect(row.data?.curriculum_node_id).toBe(topicNodeId);
+      expect(row.data?.topic).toBe("Units and Measurement — Introduction");
+    });
+
+    it("13. SECURITY: userA cannot reference userB's private curriculum node, even by submitting its real id", async () => {
+      const storeAsUserA = createCurriculumStore(userA.client);
+      const resolved = await resolveLessonCurriculumNode(
+        storeAsUserA,
+        privateNodeId,
+      );
+      // RLS hides userB's private node from userA entirely, so resolution
+      // fails exactly like a nonexistent id would — never silently accepted.
+      expect(resolved.ok).toBe(false);
+    });
+  },
+);

@@ -62,6 +62,7 @@ export function CurriculumTopicList({
       method: "POST",
       body: JSON.stringify({
         topic: composeCurriculumTopic(chapterTitle, topic.title),
+        curriculumNodeId: topic.id,
       }),
     });
     if (!lessonRes.ok) {

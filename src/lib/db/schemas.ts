@@ -377,6 +377,7 @@ const jsonValueSchema: z.ZodType<unknown> = z.lazy(() =>
 export const createLessonSchema = z.object({
   userId: uuidSchema,
   documentId: uuidSchema.nullish(),
+  curriculumNodeId: uuidSchema.nullish(),
   title: z.string().min(1).max(300),
   topic: z.string().min(1).max(300),
   objective: z.string().min(1).max(4000),
