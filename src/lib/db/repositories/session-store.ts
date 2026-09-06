@@ -1,6 +1,8 @@
 import type { Json } from "@/lib/db/types";
 import type { Result } from "@/lib/result";
+import { ok } from "@/lib/result";
 
+import type { SessionStatus } from "../enums";
 import type { Tables, TablesInsert, TablesUpdate } from "../types";
 import {
   createSessionSchema,
@@ -20,6 +22,18 @@ export interface SessionStore {
   listForUser(
     userId: string,
     options?: { limit?: number },
+  ): Promise<Result<LearningSessionRow[]>>;
+  /**
+   * This user's sessions whose `lesson_id` is one of `lessonIds`, ordered
+   * by `updated_at` DESC (the actual "last activity" signal — every
+   * teaching step touches it, unlike `created_at`). Powers the curriculum
+   * Continue Learning read model. Returns `[]` without a query when
+   * `lessonIds` is empty.
+   */
+  listRecentForUserByLessons(
+    userId: string,
+    lessonIds: string[],
+    options?: { statuses?: SessionStatus[]; limit?: number },
   ): Promise<Result<LearningSessionRow[]>>;
   update(input: UpdateSessionInput): Promise<Result<LearningSessionRow>>;
   /** Phase 2: update the teaching-loop columns (lesson, cursor, action, …). */
@@ -68,6 +82,19 @@ export function createSessionStore(db: DbClient): SessionStore {
         .select("*")
         .eq("user_id", userId)
         .order("created_at", { ascending: false });
+      if (options?.limit) query = query.limit(options.limit);
+      return listResult(await query);
+    },
+
+    async listRecentForUserByLessons(userId, lessonIds, options) {
+      if (lessonIds.length === 0) return ok([]);
+      let query = db
+        .from("learning_sessions")
+        .select("*")
+        .eq("user_id", userId)
+        .in("lesson_id", lessonIds)
+        .order("updated_at", { ascending: false });
+      if (options?.statuses) query = query.in("status", options.statuses);
       if (options?.limit) query = query.limit(options.limit);
       return listResult(await query);
     },
