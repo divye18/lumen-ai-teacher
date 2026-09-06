@@ -2,12 +2,17 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 
 import { CurriculumBreadcrumbs } from "@/components/curriculum/curriculum-breadcrumbs";
+import { CurriculumPageTransition } from "@/components/curriculum/curriculum-page-transition";
 import { CurriculumTopicList } from "@/components/curriculum/curriculum-topic-list";
 import { EmptyState } from "@/components/ui/states";
 import { requireUser } from "@/lib/auth/current-user";
-import { createCurriculumStore } from "@/lib/db/repositories";
+import {
+  createCurriculumStore,
+  createLessonStore,
+} from "@/lib/db/repositories";
 import { getSupabaseServerClient } from "@/lib/db/server";
 import { getNcertTopicLevel } from "@/lib/curriculum/ncert-browser";
+import { getTopicProgressForNodes } from "@/lib/curriculum/topic-progress";
 
 export const metadata: Metadata = { title: "Topics" };
 export const dynamic = "force-dynamic";
@@ -40,8 +45,21 @@ export default async function CurriculumTopicPage({
 
   const { classNode, subjectNode, chapterNode, topics } = level.value;
 
+  // 18.3d curriculum ENGAGEMENT progress — never mastery. Scoped to exactly
+  // this chapter's already-fetched topic nodes (not the whole source), so
+  // this is one additional lesson query, not a per-topic query.
+  const lessons = createLessonStore(supabase);
+  const progressRes = await getTopicProgressForNodes(
+    lessons,
+    user.value.id,
+    topics,
+  );
+  const statusByNodeId = new Map(
+    progressRes.ok ? progressRes.value.map((p) => [p.nodeId, p.status]) : [],
+  );
+
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-6 px-4 py-8 sm:px-6">
+    <CurriculumPageTransition className="mx-auto flex max-w-4xl flex-col gap-6 px-4 py-8 sm:px-6">
       <CurriculumBreadcrumbs
         items={[
           { label: "Classes", href: "/learn/c" },
@@ -73,9 +91,13 @@ export default async function CurriculumTopicPage({
       ) : (
         <CurriculumTopicList
           chapterTitle={chapterNode.title}
-          topics={topics.map((t) => ({ id: t.id, title: t.title }))}
+          topics={topics.map((t) => ({
+            id: t.id,
+            title: t.title,
+            status: statusByNodeId.get(t.id) ?? "NOT_STARTED",
+          }))}
         />
       )}
-    </div>
+    </CurriculumPageTransition>
   );
 }

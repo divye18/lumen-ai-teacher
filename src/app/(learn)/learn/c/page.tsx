@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { CurriculumNodeGrid } from "@/components/curriculum/curriculum-node-grid";
+import { CurriculumPageTransition } from "@/components/curriculum/curriculum-page-transition";
 import { EmptyState } from "@/components/ui/states";
 import { requireUser } from "@/lib/auth/current-user";
 import { createCurriculumStore } from "@/lib/db/repositories";
@@ -22,7 +23,7 @@ export default async function CurriculumClassPage() {
   const classes = level.ok ? level.value.classes : [];
 
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-6 px-4 py-8 sm:px-6">
+    <CurriculumPageTransition className="mx-auto flex max-w-4xl flex-col gap-6 px-4 py-8 sm:px-6">
       <header>
         <h1 className="text-xl font-semibold tracking-tight">
           Choose your class
@@ -46,6 +47,6 @@ export default async function CurriculumClassPage() {
           }))}
         />
       )}
-    </div>
+    </CurriculumPageTransition>
   );
 }

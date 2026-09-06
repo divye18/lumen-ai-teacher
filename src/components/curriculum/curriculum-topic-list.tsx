@@ -6,8 +6,12 @@ import { motion, useReducedMotion } from "framer-motion";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Panel } from "@/components/ui/surface";
 import { apiFetch } from "@/lib/ui/api-client";
 import { composeCurriculumTopic } from "@/lib/curriculum/compose-topic";
+import { cardEntrance } from "@/lib/ui/motion";
+import type { TopicStatus } from "@/lib/curriculum/topic-progress";
+import { cn } from "@/lib/ui/cn";
 
 interface CreateLessonResponse {
   ok: true;
@@ -22,16 +26,40 @@ interface StartSessionResponse {
 export interface CurriculumTopicData {
   id: string;
   title: string;
+  /** Curriculum ENGAGEMENT progress (18.3d) — never mastery. Defaults to
+   * NOT_STARTED if the caller doesn't have it (keeps this component usable
+   * without forcing every call site to compute status). */
+  status?: TopicStatus;
+}
+
+export const STATUS_BADGE: Record<
+  TopicStatus,
+  { tone: "neutral" | "accent" | "positive"; label: string }
+> = {
+  NOT_STARTED: { tone: "neutral", label: "Not started" },
+  IN_PROGRESS: { tone: "accent", label: "In progress" },
+  COMPLETED: { tone: "positive", label: "Completed" },
+};
+
+export function ctaLabel(status: TopicStatus): string {
+  if (status === "COMPLETED") return "Review topic";
+  if (status === "IN_PROGRESS") return "Continue learning";
+  return "Start learning";
 }
 
 /**
- * Terminal NCERT Curriculum Explorer screen (Milestone 18.2). Turns a
- * selected topic into an actual lesson + teaching session via the existing,
- * completely unchanged `/api/lessons` -> `/api/teaching/session` pipeline —
- * the same two-call pattern `LessonPlanView` already uses to start a
- * planned lesson. No new teaching engine, no curriculum-specific Teaching
- * Room behavior: the orchestrator never learns this session came from the
- * Curriculum Explorer.
+ * Terminal NCERT Curriculum Explorer screen (Milestone 18.2, status/CTA
+ * evolved in 19.2). Turns a selected topic into an actual lesson + teaching
+ * session via the existing, completely unchanged `/api/lessons` ->
+ * `/api/teaching/session` pipeline — the same two-call pattern
+ * `LessonPlanView` already uses to start a planned lesson. No new teaching
+ * engine, no curriculum-specific Teaching Room behavior: the orchestrator
+ * never learns this session came from the Curriculum Explorer.
+ *
+ * `status` (18.3d curriculum ENGAGEMENT progress) only changes the visible
+ * badge/CTA label — it never changes the request payload or the two-call
+ * sequence itself, and it is never mastery (see `curriculum-progress.tsx`
+ * for why those two signals are deliberately rendered differently).
  */
 export function CurriculumTopicList({
   chapterTitle,
@@ -100,42 +128,58 @@ export function CurriculumTopicList({
       {topics.map((topic, index) => {
         const starting = startingId === topic.id;
         const error = errorById[topic.id];
+        const status = topic.status ?? "NOT_STARTED";
+        const statusBadge = STATUS_BADGE[status];
+        const entrance = cardEntrance(index);
+
         return (
           <motion.div
             key={topic.id}
-            initial={reduce ? false : { opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.25, delay: reduce ? 0 : index * 0.03 }}
-            className="flex h-full flex-col justify-between rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
+            initial={reduce ? false : entrance.initial}
+            animate={entrance.animate}
+            transition={entrance.transition}
           >
-            <div>
-              <p className="text-[14px] font-medium text-[var(--color-ink)]">
-                {topic.title}
-              </p>
-              <Badge className="mt-1.5" tone="neutral">
-                Topic {index + 1} of {topics.length}
-              </Badge>
-            </div>
-
-            <div className="mt-4">
-              <Button
-                onClick={() => startLearning(topic)}
-                loading={starting}
-                disabled={startingId !== null && !starting}
-                size="sm"
-                className="w-full"
-              >
-                Start learning
-              </Button>
-              {error ? (
-                <p
-                  role="alert"
-                  className="mt-2 text-[12px] text-[var(--color-danger)]"
-                >
-                  {error}
+            <Panel
+              className={cn(
+                "flex h-full flex-col justify-between gap-4 p-4",
+                status === "IN_PROGRESS" &&
+                  "border-[color-mix(in_oklab,var(--color-learning)_35%,var(--color-border))]",
+              )}
+            >
+              <div>
+                <p className="text-[14px] font-medium text-[var(--color-ink)]">
+                  {topic.title}
                 </p>
-              ) : null}
-            </div>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  <Badge tone="neutral">
+                    Topic {index + 1} of {topics.length}
+                  </Badge>
+                  <Badge tone={statusBadge.tone} dot>
+                    {statusBadge.label}
+                  </Badge>
+                </div>
+              </div>
+
+              <div>
+                <Button
+                  onClick={() => startLearning(topic)}
+                  loading={starting}
+                  disabled={startingId !== null && !starting}
+                  size="sm"
+                  className="w-full"
+                >
+                  {ctaLabel(status)}
+                </Button>
+                {error ? (
+                  <p
+                    role="alert"
+                    className="mt-2 text-[12px] text-[var(--color-danger)]"
+                  >
+                    {error}
+                  </p>
+                ) : null}
+              </div>
+            </Panel>
           </motion.div>
         );
       })}

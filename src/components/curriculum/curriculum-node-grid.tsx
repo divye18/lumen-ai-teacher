@@ -4,6 +4,8 @@ import Link from "next/link";
 import { motion, useReducedMotion } from "framer-motion";
 
 import { Badge } from "@/components/ui/badge";
+import { Panel } from "@/components/ui/surface";
+import { cardEntrance } from "@/lib/ui/motion";
 import { cn } from "@/lib/ui/cn";
 
 export interface CurriculumNodeCardData {
@@ -17,10 +19,12 @@ export interface CurriculumNodeCardData {
 }
 
 /**
- * Responsive grid of curriculum-node cards (Class/Subject/Chapter/Topic).
- * Built entirely from existing tokens (`Panel`-equivalent surface classes,
- * `Badge`, the app's CSS variables) — no new design system. Content is
- * always caller-supplied real node data; nothing here is hardcoded.
+ * Responsive grid of curriculum-node cards (Class/Subject levels — Chapter
+ * cards moved to the dedicated `ChapterCard` in 19.2, since chapters need a
+ * genuinely different shape: a progress bar + a next-topic CTA rather than
+ * a plain navigation link). Built on the 19.1 `Panel` primitive — no new
+ * design system. Content is always caller-supplied real node data; nothing
+ * here is hardcoded.
  */
 export function CurriculumNodeGrid({
   items,
@@ -50,26 +54,26 @@ export function CurriculumNodeGrid({
           </>
         );
 
-        const cardClasses = cn(
-          "block h-full rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 transition-colors",
-          item.href
-            ? "hover:border-[var(--color-accent)] hover:bg-[var(--color-accent-soft)]"
-            : "",
+        const panelClasses = cn(
+          "h-full p-4 transition-[border-color,box-shadow]",
+          item.href &&
+            "hover:border-[var(--color-accent)] hover:shadow-[var(--shadow-sm)]",
         );
+        const entrance = cardEntrance(index);
 
         return (
           <motion.div
             key={item.id}
-            initial={reduce ? false : { opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.25, delay: reduce ? 0 : index * 0.03 }}
+            initial={reduce ? false : entrance.initial}
+            animate={entrance.animate}
+            transition={entrance.transition}
           >
             {item.href ? (
-              <Link href={item.href} className={cardClasses}>
-                {content}
+              <Link href={item.href} className="block h-full">
+                <Panel className={panelClasses}>{content}</Panel>
               </Link>
             ) : (
-              <div className={cardClasses}>{content}</div>
+              <Panel className={panelClasses}>{content}</Panel>
             )}
           </motion.div>
         );

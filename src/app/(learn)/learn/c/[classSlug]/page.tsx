@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { CurriculumBreadcrumbs } from "@/components/curriculum/curriculum-breadcrumbs";
 import { CurriculumNodeGrid } from "@/components/curriculum/curriculum-node-grid";
+import { CurriculumPageTransition } from "@/components/curriculum/curriculum-page-transition";
 import { EmptyState } from "@/components/ui/states";
 import { requireUser } from "@/lib/auth/current-user";
 import { createCurriculumStore } from "@/lib/db/repositories";
@@ -29,7 +30,7 @@ export default async function CurriculumSubjectPage({
   const { classNode, subjects } = level.value;
 
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-6 px-4 py-8 sm:px-6">
+    <CurriculumPageTransition className="mx-auto flex max-w-4xl flex-col gap-6 px-4 py-8 sm:px-6">
       <CurriculumBreadcrumbs
         items={[
           { label: "Classes", href: "/learn/c" },
@@ -60,6 +61,6 @@ export default async function CurriculumSubjectPage({
           }))}
         />
       )}
-    </div>
+    </CurriculumPageTransition>
   );
 }
