@@ -28,6 +28,17 @@ export interface LessonStore {
   create(input: CreateLessonInput): Promise<Result<LessonRow>>;
   get(lessonId: string): Promise<Result<LessonRow>>;
   listForUser(userId: string): Promise<Result<LessonRow[]>>;
+  /**
+   * This user's lessons whose `curriculum_node_id` is one of `nodeIds`.
+   * Powers the curriculum topic-progress read model — scoped to a specific
+   * set of nodes rather than fetching every lesson for the user, since a
+   * curriculum source's topic set is normally small and known upfront.
+   * Returns `[]` without a query when `nodeIds` is empty.
+   */
+  listForUserByCurriculumNodes(
+    userId: string,
+    nodeIds: string[],
+  ): Promise<Result<LessonRow[]>>;
   update(input: UpdateLessonInput): Promise<Result<LessonRow>>;
   addConcepts(
     inputs: AddLessonConceptInput[],
@@ -83,6 +94,19 @@ export function createLessonStore(db: DbClient): LessonStore {
           .select("*")
           .eq("user_id", id.value)
           .order("created_at", { ascending: false }),
+      );
+    },
+
+    async listForUserByCurriculumNodes(userId, nodeIds) {
+      const id = parseInput(uuidSchema, userId);
+      if (!id.ok) return id;
+      if (nodeIds.length === 0) return ok([]);
+      return listResult(
+        await db
+          .from("lessons")
+          .select("*")
+          .eq("user_id", id.value)
+          .in("curriculum_node_id", nodeIds),
       );
     },
 
