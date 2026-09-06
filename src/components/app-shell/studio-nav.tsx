@@ -12,6 +12,11 @@ import { cn } from "@/lib/ui/cn";
 const NAV = [
   { href: "/studio", label: "Studio", match: (p: string) => p === "/studio" },
   {
+    href: "/learn/c",
+    label: "Curriculum",
+    match: (p: string) => p.startsWith("/learn/c"),
+  },
+  {
     href: "/studio/knowledge",
     label: "Knowledge",
     match: (p: string) => p.startsWith("/studio/knowledge"),
@@ -47,7 +52,10 @@ export function StudioNav({ email }: { email: string | null }) {
           <LumenWordmark />
         </Link>
 
-        <nav className="flex items-center gap-0.5" aria-label="Primary">
+        <nav
+          className="lumen-scroll flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto"
+          aria-label="Primary"
+        >
           {NAV.map((item) => {
             const active = item.match(pathname);
             return (
@@ -56,7 +64,7 @@ export function StudioNav({ email }: { email: string | null }) {
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "rounded-[var(--radius-sm)] px-3 py-1.5 text-[13px] font-medium transition-colors",
+                  "shrink-0 rounded-[var(--radius-sm)] px-3 py-1.5 text-[13px] font-medium whitespace-nowrap transition-colors",
                   active
                     ? "bg-[var(--color-subtle)] text-[var(--color-ink)]"
                     : "text-[var(--color-ink-muted)] hover:bg-[var(--color-subtle)] hover:text-[var(--color-ink)]",
@@ -68,7 +76,7 @@ export function StudioNav({ email }: { email: string | null }) {
           })}
         </nav>
 
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ml-auto flex shrink-0 items-center gap-1">
           <ThemeToggle />
           <div className="group relative">
             <button
