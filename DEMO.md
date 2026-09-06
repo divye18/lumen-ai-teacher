@@ -6,27 +6,42 @@ to running a demo.
 
 **This is not a fake demo mode.** There is no hidden flag, no special UI, no
 scripted learner state. Every step below exercises the same code path a real
-learner uses. The one configuration choice below (LLM on/off) selects between
-two teaching-question sources that already exist in the product for every
-session, demo or not (see [`.env.example`](.env.example) and
+learner uses. The configuration choice below (`ASSESSMENT_LLM_ENABLED`)
+selects between two teaching-question sources that already exist in the
+product for every session, demo or not (see [`.env.example`](.env.example) and
 `src/lib/assessment/structured/select.ts`).
+
+## Two independent knobs: AI explanation vs. AI assessment
+
+`LLM_API_KEY` and `ASSESSMENT_LLM_ENABLED` control two **separate**
+capabilities. Configuring an LLM key alone no longer switches the assessment
+engine — it only makes richer AI explanations/enrichment available
+(conversation, teaching-content prose, the teaching engine's reasoning, which
+is always reconciled by the deterministic policy either way).
+`ASSESSMENT_LLM_ENABLED` (default `false`) is the only thing that permits an
+LLM to drive question generation and grading. Assessment stays on the
+deterministic path — the same one used with no LLM configured at all —
+regardless of whether `LLM_API_KEY` is set, unless you explicitly opt in.
 
 ## Two teaching-question modes (both real, both already shipped)
 
-|                         | `LLM_API_KEY` unset/blank                                                                                        | `LLM_API_KEY` set                                                                                              |
+|                         | `ASSESSMENT_LLM_ENABLED=false` (default, any `LLM_API_KEY`)                                                      | `ASSESSMENT_LLM_ENABLED=true` (requires `LLM_API_KEY`)                                                         |
 | ----------------------- | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | Questions               | Deterministic, hand-authored bank (`src/lib/assessment/structured/bank.ts`), matched to the concept being taught | LLM-generated free-form, graded by the LLM evaluator                                                           |
 | Grading                 | Pure deterministic code (`gradeStructuredAnswer`)                                                                | LLM structured-output judgment (conservative non-LLM fallback on failure, which never reports a misconception) |
 | Misconception detection | Reliable — a wrong option tagged with a known misconception fires deterministically                              | Contingent on that specific LLM call's live judgment — not guaranteed on any single run                        |
 
-**For a live demo where the misconception moment must land, run with
-`LLM_API_KEY` unset or blank in `.env.local`.** This is the deterministic
-fallback the Teaching Engine already falls back to whenever no LLM is
-configured (see README → "Adaptive teaching engine" → Config) — not a
-demo-only code path.
+**For a live demo where the misconception moment must land, leave
+`ASSESSMENT_LLM_ENABLED` unset (or `false`) in `.env.local`.** This is the
+default, and it is the deterministic fallback the Teaching Engine already
+falls back to whenever no LLM is permitted to drive assessment (see README →
+"Adaptive teaching engine" → Config) — not a demo-only code path. This holds
+even with a valid `LLM_API_KEY` configured for AI explanations.
 
-To confirm which mode is active, check `GET /api/health` →
-`checks.llmProviderRegistered` (`false` = deterministic mode).
+`GET /api/health` → `checks.llmProviderRegistered` reports whether an LLM
+provider exists at all (`false` = no AI explanation either). It does **not**
+report assessment mode — that's controlled purely by `ASSESSMENT_LLM_ENABLED`
+in `.env.local`, independent of the health check.
 
 ## The demo lesson
 
@@ -84,12 +99,13 @@ npm run build
 
 ## Backup plan
 
-- **LLM configured but you want the guaranteed path:** temporarily blank
-  `LLM_API_KEY` in `.env.local` and restart `npm run dev`. No data is lost;
-  this only changes which question source is used going forward.
+- **LLM configured but you want the guaranteed assessment path:** confirm
+  `ASSESSMENT_LLM_ENABLED` is unset or `false` in `.env.local` (the default) —
+  no need to remove `LLM_API_KEY` at all; AI explanations keep working, only
+  assessment stays deterministic.
 - **The picked distractor doesn't trigger a misconception on a given
-  run:** confirm `LLM_API_KEY` is actually blank (check `/api/health`) — if an
-  LLM key is active, that's the expected reason (see the mode table above).
+  run:** confirm `ASSESSMENT_LLM_ENABLED` is actually `false` — if it's `true`,
+  that's the expected reason (see the mode table above).
 - **A network request fails / a step looks stuck:** the Teaching Room has a
   dedicated retry (`ErrorState` → "This step didn't load"); reloading the page
   resumes the session from persisted state (mastery/progress are never lost —

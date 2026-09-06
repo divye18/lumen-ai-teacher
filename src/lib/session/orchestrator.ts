@@ -153,6 +153,14 @@ export interface OrchestratorDeps {
   llm: LLMProvider | null;
   retriever: Retriever | null;
   userId: string;
+  /**
+   * Independent of `llm`: whether the LLM is permitted to drive assessment
+   * (question generation + grading), rather than only AI explanation/
+   * enrichment (conversation, teaching content, engine reasoning). Defaults
+   * to `false` upstream (`buildTeachingRuntime`) so configuring an LLM
+   * provider alone never switches assessment off its deterministic path.
+   */
+  assessmentLlmEnabled?: boolean;
 }
 
 export interface TeachingOrchestrator {
@@ -317,6 +325,10 @@ export function createTeachingOrchestrator(
   const interactions = createInteractionStore(deps.db);
   const assessments = createAssessmentStore(deps.db);
   const engine = createTeachingEngine({ llm: deps.llm });
+  // Assessment (question selection + grading) stays on the deterministic
+  // path unless explicitly opted into LLM-driven assessment — independent of
+  // whether `deps.llm` merely exists for AI explanation/enrichment.
+  const assessmentLlmEnabled = deps.assessmentLlmEnabled === true;
 
   /**
    * Snapshot each lesson concept's current mastery (0–100). Used at session
@@ -1222,29 +1234,28 @@ export function createTeachingOrchestrator(
         // unavailable and a safe structured question exists; otherwise the
         // free-form (LLM-evaluated) path; the deterministic free-form template
         // is the last resort.
-        const structured =
-          deps.llm === null
-            ? pickStructuredQuestion({
-                conceptKey: engineConcept.key,
-                title: engineConcept.title,
-                summary: engineConcept.summary,
-                targetKind: kind,
-                difficulty: engineConcept.difficulty,
-                masteryPoints,
-                struggling:
-                  facts.lastClassification === "INCORRECT" ||
-                  facts.incorrectStreak >= 1,
-                usedPrompts: data.recentQuestions
-                  .filter((q) => q.concept_key === engineConcept.key)
-                  .map((q) => q.prompt),
-                preferFormat: personalization.targetFormatWeakness,
-                verifyMisconceptionCategory: targetMisconceptionCategory,
-                graph: buildTemplateGraphContext(
-                  data.graphView,
-                  engineConcept.key,
-                ),
-              })
-            : null;
+        const structured = !assessmentLlmEnabled
+          ? pickStructuredQuestion({
+              conceptKey: engineConcept.key,
+              title: engineConcept.title,
+              summary: engineConcept.summary,
+              targetKind: kind,
+              difficulty: engineConcept.difficulty,
+              masteryPoints,
+              struggling:
+                facts.lastClassification === "INCORRECT" ||
+                facts.incorrectStreak >= 1,
+              usedPrompts: data.recentQuestions
+                .filter((q) => q.concept_key === engineConcept.key)
+                .map((q) => q.prompt),
+              preferFormat: personalization.targetFormatWeakness,
+              verifyMisconceptionCategory: targetMisconceptionCategory,
+              graph: buildTemplateGraphContext(
+                data.graphView,
+                engineConcept.key,
+              ),
+            })
+          : null;
 
         // Learner-safe rationale: only surfaced when the picked question
         // actually landed on the target (never forced, never named).
@@ -1272,7 +1283,7 @@ export function createTeachingOrchestrator(
         // the learner in ungradeable free-form questions. If they have already
         // cleared at least one structured check here, advance to the next
         // concept instead of stalling.
-        if (deps.llm === null && !structured) {
+        if (!assessmentLlmEnabled && !structured) {
           const structuredQuestionIdsHere = new Set(
             data.recentQuestions
               .filter(
@@ -1375,8 +1386,15 @@ export function createTeachingOrchestrator(
           });
         }
 
+        // Assessment-path LLM use is gated by `assessmentLlmEnabled`, not by
+        // whether a provider merely exists for AI explanation/enrichment —
+        // when the flag is off, this call must fall back to the
+        // deterministic template inside `generateQuestion`, never a real
+        // model call, even in the rare case the structured bank/template is
+        // exhausted without the exhaustion guard above having already
+        // advanced the concept.
         const generated = await generateQuestion({
-          llm: deps.llm,
+          llm: assessmentLlmEnabled ? deps.llm : null,
           concept: {
             key: engineConcept.key,
             title: engineConcept.title,
@@ -1651,8 +1669,12 @@ export function createTeachingOrchestrator(
           breakdown: graded.breakdown,
         };
       } else {
+        // Same gating as question generation: a free-form question is only
+        // graded by the real LLM when assessment is explicitly opted in —
+        // otherwise `evaluateAnswer`'s deterministic (conservative) fallback
+        // is used, even if a provider exists for explanations elsewhere.
         const evaluated = await evaluateAnswer({
-          llm: deps.llm,
+          llm: assessmentLlmEnabled ? deps.llm : null,
           question: {
             prompt: question.prompt,
             expectedReasoning: question.expected_reasoning,

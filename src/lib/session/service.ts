@@ -3,6 +3,7 @@ import "server-only";
 import { getEmbeddingProviderFromConfig } from "@/lib/ai/embedding";
 import { getLLMProviderFromConfig } from "@/lib/ai/llm";
 import type { LLMProvider } from "@/lib/ai/types";
+import { serverConfig } from "@/config/server";
 import type { LumenServerClient } from "@/lib/db/server";
 import { createSupabaseRetriever, type Retriever } from "@/lib/rag";
 
@@ -32,6 +33,11 @@ export function buildTeachingRuntime(
 ): TeachingRuntime {
   const llmResult = getLLMProviderFromConfig();
   const llm = llmResult.ok ? llmResult.value : null;
+  // Independent of `llm`: whether the LLM is *permitted* to drive assessment
+  // (question generation + grading) rather than only AI explanation/
+  // enrichment. Configuring LLM_API_KEY alone must never flip this on.
+  const assessmentLlmEnabled =
+    serverConfig.ai.llm.assessmentEnabled && llm !== null;
 
   let retriever: Retriever | null = null;
   const embeddingsResult = getEmbeddingProviderFromConfig();
@@ -44,7 +50,13 @@ export function buildTeachingRuntime(
   }
 
   return {
-    orchestrator: createTeachingOrchestrator({ db, llm, retriever, userId }),
+    orchestrator: createTeachingOrchestrator({
+      db,
+      llm,
+      retriever,
+      userId,
+      assessmentLlmEnabled,
+    }),
     llm,
     retriever,
     llmConfigured: llm !== null,

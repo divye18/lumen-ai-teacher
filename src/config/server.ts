@@ -27,6 +27,16 @@ const serverEnvSchema = z.object({
   LLM_MODEL: z.string().min(1).default("gpt-4o-mini"),
   LLM_BASE_URL: z.string().url().default("https://api.openai.com/v1"),
   LLM_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.2),
+  /**
+   * Independently gates whether LLM-generated assessment (free-form
+   * questions + LLM grading) is allowed. Defaults to false so configuring
+   * `LLM_API_KEY` alone only enables AI explanation/enrichment — it never
+   * silently switches the assessment engine off its deterministic path.
+   */
+  ASSESSMENT_LLM_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((v) => v === "true"),
 
   EMBEDDING_PROVIDER: z.string().min(1).default("openai"),
   EMBEDDING_API_KEY: z.string().min(1).optional(),
@@ -89,6 +99,7 @@ export const serverConfig = {
       model: env.LLM_MODEL,
       baseUrl: env.LLM_BASE_URL,
       temperature: env.LLM_TEMPERATURE,
+      assessmentEnabled: env.ASSESSMENT_LLM_ENABLED,
     },
     embedding: {
       provider: env.EMBEDDING_PROVIDER,
