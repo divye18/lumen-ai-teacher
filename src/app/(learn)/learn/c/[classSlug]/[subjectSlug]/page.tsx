@@ -86,10 +86,10 @@ export default async function CurriculumChapterPage({
       />
 
       <header>
-        <h1 className="text-xl font-semibold tracking-tight">
+        <h1 className="text-[length:var(--text-display)] font-semibold tracking-tight text-[var(--color-ink)]">
           {subjectNode.title}
         </h1>
-        <p className="mt-1 text-[13px] text-[var(--color-ink-muted)]">
+        <p className="mt-1 text-[length:var(--text-body)] text-[var(--color-ink-muted)]">
           Choose a chapter to see its topics.
         </p>
       </header>

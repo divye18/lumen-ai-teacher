@@ -77,20 +77,39 @@
   --color-warning: #c2620d;
   --color-danger: #dc2626;
 
+  /* Milestone 20 — achievement/completion semantic, restrained amber/gold.
+     Reserved for milestones/completion moments only — never a general
+     "highlight" color, per the visual-identity brief. */
+  --color-achievement: #a1690a;
+  --color-achievement-soft: color-mix(
+    in oklab,
+    var(--color-achievement) 12%,
+    var(--color-surface)
+  );
+
   --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.04);
   --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04);
   --shadow-md:
     0 4px 12px -2px rgb(0 0 0 / 0.08), 0 2px 6px -2px rgb(0 0 0 / 0.05);
   --shadow-lg: 0 16px 48px -12px rgb(0 0 0 / 0.14);
+  /* Milestone 20 — a deeper elevation for the ONE hero surface per screen
+     (e.g. Continue Learning). Deliberately used sparingly, not a general
+     "bigger shadow" option. */
+  --shadow-hero: 0 24px 64px -16px rgb(0 0 0 / 0.18);
 
-  /* Milestone 19.1 — a documented typography scale for 19.2+ screens to
-     adopt. Not applied anywhere yet: existing literal `text-[13px]`-style
-     call sites are untouched. Font family/weight stack is unchanged. */
+  /* Milestone 20 — typography scale, now actually applied (19.1 declared
+     these but nothing consumed them). `--text-hero` added above `display`
+     for the one true page-hero headline (e.g. Continue Learning's topic
+     title); `display` remains for ordinary page titles. Font family/weight
+     stack is unchanged — hierarchy comes from size + weight + color, not a
+     second typeface. */
+  --text-hero: 2.5rem;
   --text-display: 1.75rem;
   --text-title: 1.25rem;
   --text-subtitle: 0.9375rem;
   --text-body: 0.875rem;
   --text-meta: 0.75rem;
+  --text-label: 0.6875rem;
 }
 
 .dark {
@@ -140,10 +159,18 @@
   --color-warning: #e08b3a;
   --color-danger: #f87171;
 
+  --color-achievement: #e0a72e;
+  --color-achievement-soft: color-mix(
+    in oklab,
+    var(--color-achievement) 14%,
+    var(--color-surface)
+  );
+
   --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.3);
   --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.4);
   --shadow-md: 0 4px 16px -2px rgb(0 0 0 / 0.5);
   --shadow-lg: 0 20px 56px -12px rgb(0 0 0 / 0.6);
+  --shadow-hero: 0 28px 72px -16px rgb(0 0 0 / 0.7);
 }
 
 @layer base {
@@ -225,4 +252,22 @@
     opacity: 0;
     transform: translateY(6px) scale(0.98);
   }
+}
+
+/* Milestone 20 — the ONE hero surface's background geometry. Two extremely
+   low-opacity radial fields (identity indigo + learning teal), never a full
+   gradient wash, never glassmorphism (no blur/opacity on foreground content).
+   Used only by `Panel` variant="hero". */
+.lumen-hero-field {
+  background-image:
+    radial-gradient(
+      120% 140% at 100% 0%,
+      color-mix(in oklab, var(--color-accent) 10%, transparent),
+      transparent 60%
+    ),
+    radial-gradient(
+      100% 120% at 0% 100%,
+      color-mix(in oklab, var(--color-learning) 7%, transparent),
+      transparent 55%
+    );
 }

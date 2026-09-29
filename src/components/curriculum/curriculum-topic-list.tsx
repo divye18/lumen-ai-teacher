@@ -2,14 +2,18 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/ui/surface";
+import {
+  type LearningModeId,
+  ModeSelector,
+} from "@/components/curriculum/mode-selector";
 import { apiFetch } from "@/lib/ui/api-client";
 import { composeCurriculumTopic } from "@/lib/curriculum/compose-topic";
-import { cardEntrance } from "@/lib/ui/motion";
+import { cardEntrance, cardHover, sectionEntrance } from "@/lib/ui/motion";
 import type { TopicStatus } from "@/lib/curriculum/topic-progress";
 import { cn } from "@/lib/ui/cn";
 
@@ -72,6 +76,10 @@ export function CurriculumTopicList({
   const reduce = useReducedMotion();
   const [startingId, setStartingId] = useState<string | null>(null);
   const [errorById, setErrorById] = useState<Record<string, string>>({});
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [modeByTopic, setModeByTopic] = useState<
+    Record<string, LearningModeId>
+  >({});
   /**
    * A ref (not just the `startingId` state) guards against a double-click
    * landing before React commits the re-render that disables the button —
@@ -131,6 +139,8 @@ export function CurriculumTopicList({
         const status = topic.status ?? "NOT_STARTED";
         const statusBadge = STATUS_BADGE[status];
         const entrance = cardEntrance(index);
+        const expanded = expandedId === topic.id;
+        const selectedMode = modeByTopic[topic.id] ?? "explain";
 
         return (
           <motion.div
@@ -138,16 +148,23 @@ export function CurriculumTopicList({
             initial={reduce ? false : entrance.initial}
             animate={entrance.animate}
             transition={entrance.transition}
+            whileHover={reduce ? undefined : cardHover}
           >
             <Panel
+              variant="elevated"
               className={cn(
-                "flex h-full flex-col justify-between gap-4 p-4",
+                "flex h-full flex-col justify-between gap-4 p-5",
                 status === "IN_PROGRESS" &&
                   "border-[color-mix(in_oklab,var(--color-learning)_35%,var(--color-border))]",
+                status === "COMPLETED" &&
+                  "border-[color-mix(in_oklab,var(--color-positive)_28%,var(--color-border))]",
               )}
             >
+              {/* Hierarchy: title -> status -> mode choice -> primary
+                  action. The mode toggle is a distinct, smaller control so
+                  it never competes with the title for visual weight. */}
               <div>
-                <p className="text-[14px] font-medium text-[var(--color-ink)]">
+                <p className="text-[length:var(--text-subtitle)] font-semibold tracking-tight text-[var(--color-ink)]">
                   {topic.title}
                 </p>
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -161,10 +178,66 @@ export function CurriculumTopicList({
               </div>
 
               <div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setExpandedId((prev) =>
+                      prev === topic.id ? null : topic.id,
+                    )
+                  }
+                  aria-expanded={expanded}
+                  className="flex items-center gap-1 text-[length:var(--text-meta)] font-medium text-[var(--color-ink-muted)] transition-colors hover:text-[var(--color-ink)]"
+                >
+                  <motion.svg
+                    aria-hidden
+                    viewBox="0 0 12 12"
+                    className="size-3"
+                    animate={{ rotate: expanded ? 90 : 0 }}
+                    transition={{ duration: reduce ? 0 : 0.15 }}
+                  >
+                    <path
+                      d="M4 2l4 4-4 4"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </motion.svg>
+                  How do you want to learn this?
+                </button>
+
+                <AnimatePresence initial={false}>
+                  {expanded ? (
+                    <motion.div
+                      key="modes"
+                      initial={reduce ? false : { opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={reduce ? undefined : { opacity: 0, height: 0 }}
+                      transition={sectionEntrance.transition}
+                      className="overflow-hidden"
+                    >
+                      <ModeSelector
+                        selected={selectedMode}
+                        onSelect={(mode) =>
+                          setModeByTopic((prev) => ({
+                            ...prev,
+                            [topic.id]: mode,
+                          }))
+                        }
+                        className="mt-3"
+                      />
+                    </motion.div>
+                  ) : null}
+                </AnimatePresence>
+              </div>
+
+              <div>
                 <Button
                   onClick={() => startLearning(topic)}
                   loading={starting}
                   disabled={startingId !== null && !starting}
+                  variant={status === "COMPLETED" ? "secondary" : "primary"}
                   size="sm"
                   className="w-full"
                 >

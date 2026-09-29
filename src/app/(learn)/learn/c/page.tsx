@@ -25,11 +25,14 @@ export default async function CurriculumClassPage() {
   return (
     <CurriculumPageTransition className="mx-auto flex max-w-4xl flex-col gap-6 px-4 py-8 sm:px-6">
       <header>
-        <h1 className="text-xl font-semibold tracking-tight">
+        <p className="text-[length:var(--text-label)] font-semibold tracking-[0.08em] text-[var(--color-accent)] uppercase">
+          NCERT curriculum
+        </p>
+        <h1 className="mt-1 text-[length:var(--text-display)] font-semibold tracking-tight text-[var(--color-ink)]">
           Choose your class
         </h1>
-        <p className="mt-1 text-[13px] text-[var(--color-ink-muted)]">
-          Browse the NCERT curriculum, starting with your class.
+        <p className="mt-1 text-[length:var(--text-body)] text-[var(--color-ink-muted)]">
+          Browse the curriculum, starting with your class.
         </p>
       </header>
 

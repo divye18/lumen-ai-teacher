@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { LinkButton } from "@/components/ui/button";
 import { CurriculumProgressBar } from "@/components/ui/curriculum-progress";
 import { Panel } from "@/components/ui/surface";
-import { cardEntrance } from "@/lib/ui/motion";
+import { cardEntrance, cardHover } from "@/lib/ui/motion";
 
 export interface ChapterCardData {
   id: string;
@@ -57,18 +57,22 @@ export function ChapterCard({
       initial={reduce ? false : entrance.initial}
       animate={entrance.animate}
       transition={entrance.transition}
+      whileHover={reduce ? undefined : cardHover}
     >
-      <Panel className="flex h-full flex-col justify-between gap-4 p-4">
+      <Panel
+        variant="elevated"
+        className="flex h-full flex-col justify-between gap-4 p-5"
+      >
         <div>
           <Link
             href={chapter.href}
-            className="text-[14px] font-medium text-[var(--color-ink)] transition-colors hover:text-[var(--color-accent)]"
+            className="text-[length:var(--text-subtitle)] font-semibold tracking-tight text-[var(--color-ink)] transition-colors hover:text-[var(--color-accent)]"
           >
             {chapter.title}
           </Link>
 
           {chapter.totalTopics > 0 ? (
-            <div className="mt-3">
+            <div className="mt-4">
               <CurriculumProgressBar
                 completed={chapter.completedTopics}
                 total={chapter.totalTopics}

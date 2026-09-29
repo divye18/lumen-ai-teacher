@@ -48,14 +48,14 @@ export function HomeProgressSection({
             animate={panelEntrance.animate}
             transition={panelEntrance.transition}
           >
-            <Panel inset>
+            <Panel variant="progress" inset>
               <CurriculumProgressBar
                 completed={chapterProgress.completedTopics}
                 total={chapterProgress.totalTopics}
               />
               <div className="mt-3">
                 {nextTopic ? (
-                  <p className="text-[12px] text-[var(--color-ink-muted)]">
+                  <p className="text-[length:var(--text-meta)] text-[var(--color-ink-muted)]">
                     Next: {nextTopic.title}
                   </p>
                 ) : (
@@ -74,14 +74,14 @@ export function HomeProgressSection({
             animate={panelEntrance.animate}
             transition={panelEntrance.transition}
           >
-            <Panel inset>
-              <p className="text-[12px] font-medium tracking-tight text-[var(--color-ink-muted)]">
+            <Panel variant="elevated" inset>
+              <p className="text-[length:var(--text-label)] font-semibold tracking-[0.08em] text-[var(--color-ink-muted)] uppercase">
                 Concept mastery
               </p>
               <div className="mt-3">
                 <MasteryMeter value={masterySummary.averagePoints} />
               </div>
-              <p className="mt-2 text-[12px] text-[var(--color-ink-muted)]">
+              <p className="mt-2 text-[length:var(--text-meta)] text-[var(--color-ink-muted)]">
                 Average across {masterySummary.conceptCount} concept
                 {masterySummary.conceptCount === 1 ? "" : "s"}
               </p>

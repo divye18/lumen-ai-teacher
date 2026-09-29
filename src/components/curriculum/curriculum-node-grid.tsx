@@ -5,7 +5,7 @@ import { motion, useReducedMotion } from "framer-motion";
 
 import { Badge } from "@/components/ui/badge";
 import { Panel } from "@/components/ui/surface";
-import { cardEntrance } from "@/lib/ui/motion";
+import { cardEntrance, cardHover } from "@/lib/ui/motion";
 import { cn } from "@/lib/ui/cn";
 
 export interface CurriculumNodeCardData {
@@ -38,11 +38,11 @@ export function CurriculumNodeGrid({
       {items.map((item, index) => {
         const content = (
           <>
-            <p className="text-[14px] font-medium text-[var(--color-ink)]">
+            <p className="text-[length:var(--text-subtitle)] font-semibold tracking-tight text-[var(--color-ink)]">
               {item.title}
             </p>
             {item.subtitle ? (
-              <p className="mt-1 text-[12px] text-[var(--color-ink-muted)]">
+              <p className="mt-1 text-[length:var(--text-meta)] text-[var(--color-ink-muted)]">
                 {item.subtitle}
               </p>
             ) : null}
@@ -55,9 +55,8 @@ export function CurriculumNodeGrid({
         );
 
         const panelClasses = cn(
-          "h-full p-4 transition-[border-color,box-shadow]",
-          item.href &&
-            "hover:border-[var(--color-accent)] hover:shadow-[var(--shadow-sm)]",
+          "h-full p-5 transition-[border-color,box-shadow] duration-200",
+          item.href && "hover:border-[var(--color-accent)]",
         );
         const entrance = cardEntrance(index);
 
@@ -67,13 +66,18 @@ export function CurriculumNodeGrid({
             initial={reduce ? false : entrance.initial}
             animate={entrance.animate}
             transition={entrance.transition}
+            whileHover={reduce || !item.href ? undefined : cardHover}
           >
             {item.href ? (
               <Link href={item.href} className="block h-full">
-                <Panel className={panelClasses}>{content}</Panel>
+                <Panel variant="elevated" className={panelClasses}>
+                  {content}
+                </Panel>
               </Link>
             ) : (
-              <Panel className={panelClasses}>{content}</Panel>
+              <Panel variant="quiet" className={panelClasses}>
+                {content}
+              </Panel>
             )}
           </motion.div>
         );

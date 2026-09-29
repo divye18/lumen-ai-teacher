@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
+import { motion, useReducedMotion } from "framer-motion";
 
 import { LumenWordmark } from "@/components/ui/lumen-mark";
 import { ThemeToggle } from "@/components/ui/theme";
@@ -33,6 +34,7 @@ export function StudioNav({ email }: { email: string | null }) {
   const pathname = usePathname();
   const router = useRouter();
   const [signingOut, setSigningOut] = useState(false);
+  const reduce = useReducedMotion();
 
   async function signOut() {
     setSigningOut(true);
@@ -48,12 +50,12 @@ export function StudioNav({ email }: { email: string | null }) {
   return (
     <header className="sticky top-0 z-30 border-b border-[var(--color-border)] bg-[color-mix(in_oklab,var(--color-canvas)_88%,transparent)] backdrop-blur-md">
       <div className="mx-auto flex h-14 max-w-6xl items-center gap-1 px-4 sm:px-6">
-        <Link href="/studio" className="mr-3 shrink-0">
+        <Link href="/studio" className="mr-4 shrink-0">
           <LumenWordmark />
         </Link>
 
         <nav
-          className="lumen-scroll flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto"
+          className="lumen-scroll relative flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto"
           aria-label="Primary"
         >
           {NAV.map((item) => {
@@ -64,13 +66,20 @@ export function StudioNav({ email }: { email: string | null }) {
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "shrink-0 rounded-[var(--radius-sm)] px-3 py-1.5 text-[13px] font-medium whitespace-nowrap transition-colors",
+                  "relative shrink-0 rounded-[var(--radius-sm)] px-3 py-1.5 text-[13px] font-medium whitespace-nowrap transition-colors",
                   active
-                    ? "bg-[var(--color-subtle)] text-[var(--color-ink)]"
-                    : "text-[var(--color-ink-muted)] hover:bg-[var(--color-subtle)] hover:text-[var(--color-ink)]",
+                    ? "text-[var(--color-ink)]"
+                    : "text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]",
                 )}
               >
                 {item.label}
+                {active ? (
+                  <motion.span
+                    layoutId={reduce ? undefined : "studio-nav-active"}
+                    className="absolute inset-x-2 -bottom-[1px] h-[2px] rounded-full bg-[var(--color-accent)]"
+                    transition={{ type: "spring", stiffness: 500, damping: 40 }}
+                  />
+                ) : null}
               </Link>
             );
           })}
