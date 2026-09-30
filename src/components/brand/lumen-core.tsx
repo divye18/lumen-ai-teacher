@@ -54,6 +54,7 @@ function FallbackView() {
 
 export type LumenCoreSize = "hero" | "medium" | "small";
 export type LumenCoreIntensity = "subtle" | "focus";
+export type LumenCoreState = "IDLE" | "TEACHING" | "LISTENING" | "THINKING" | "MISCONCEPTION" | "RETEACHING" | "VERIFYING" | "MASTERY";
 
 const SIZE_STYLES: Record<LumenCoreSize, string> = {
   hero: "w-[240px] h-[240px] sm:w-[320px] sm:h-[320px] lg:w-[400px] lg:h-[400px]",
@@ -64,11 +65,13 @@ const SIZE_STYLES: Record<LumenCoreSize, string> = {
 export function LumenCore({
   size = "hero",
   intensity = "subtle",
+  state = "IDLE",
   interactive = false,
   className,
 }: {
   size?: LumenCoreSize;
   intensity?: LumenCoreIntensity;
+  state?: LumenCoreState;
   interactive?: boolean;
   className?: string;
 }) {
@@ -91,6 +94,7 @@ export function LumenCore({
         <CoreErrorBoundary fallback={<FallbackView />}>
           <LumenCoreCanvas
             intensity={intensity}
+            state={state}
             interactive={interactive}
             reduceMotion={!!reduce}
             trackRef={containerRef}

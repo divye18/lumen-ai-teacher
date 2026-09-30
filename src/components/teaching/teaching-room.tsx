@@ -58,6 +58,8 @@ import type {
 } from "@/lib/session/views";
 import { cn } from "@/lib/ui/cn";
 
+import { LumenCore } from "@/components/brand/lumen-core";
+import { Button } from "@/components/ui/button";
 type Phase =
   "loading" | "teaching" | "question" | "result" | "complete" | "error";
 
@@ -521,311 +523,168 @@ export function TeachingRoom({
     activeDecision?.whyThisNext?.reason ??
     (phase === "question" ? "Lumen is checking this concept now." : null);
 
+  let coreState = "IDLE";
+  if (phase === "loading") {
+    coreState = "THINKING";
+  } else if (phase === "complete" || (currentConceptKey && statusByKey[currentConceptKey] === "MASTERED")) {
+    coreState = "MASTERY";
+  } else if (phase === "teaching") {
+    coreState = step?.decision.action === "SIMPLIFY" || step?.decision.action === "HINT" ? "RETEACHING" : "TEACHING";
+  } else if (phase === "question") {
+    coreState = voiceEnabled && listenTargetRef.current === "question" && !voiceAnswer ? "LISTENING" : "IDLE";
+  } else if (phase === "result") {
+    if (busy) coreState = "THINKING";
+    else if (result?.evaluation?.misconception) coreState = "MISCONCEPTION";
+    else if (result?.evaluation.classification === "CORRECT") coreState = "VERIFYING";
+    else coreState = "IDLE";
+  }
+
   return (
-    <div className="flex min-h-svh flex-col bg-[var(--color-canvas)]">
-      <TeachingTopBar
-        conceptLabel={
-          concepts.length > 0
-            ? `Concept ${Math.min(currentIndex + 1, concepts.length)} / ${concepts.length}`
-            : null
-        }
-        masteryPct={masteryPct}
-        elapsedSec={elapsedSec}
-        timeRemaining={timeRemaining}
-        presenceLabel={presenceStatusLabel(presence, phase)}
-        liveStatus={liveStatus}
-        voiceEnabled={voiceEnabled}
-        voiceSupported={voice.capabilities.anyVoice}
-        onToggleVoice={() => {
-          if (voiceEnabled) voice.stopSpeaking();
-          setVoiceEnabled((v) => !v);
-        }}
-        demo={demo}
-      />
+    <div className="dark flex flex-col lg:flex-row h-svh w-full overflow-hidden bg-[var(--color-canvas)] text-[var(--color-ink)] selection:bg-[var(--color-ink-muted)] selection:text-[var(--color-canvas)]">
+      
+      <div className="absolute top-0 left-0 w-full z-40">
+        <TeachingTopBar
+          conceptLabel={currentConceptKey ? (statusByKey[currentConceptKey] === "MASTERED" ? "Mastered" : "Learning") : null}
+          masteryPct={snapshot.masteryPoints}
+          elapsedSec={elapsedSec}
+          timeRemaining={timeRemaining}
+          presenceLabel={teachingRevealed ? "Lumen is listening" : "Lumen is explaining"}
+          liveStatus={null}
+          voiceEnabled={voiceEnabled}
+          voiceSupported={voice.capabilities.synthesis || voice.capabilities.recognition}
+          onToggleVoice={() => setVoiceEnabled(!voiceEnabled)}
+          demo={demo}
+        />
+      </div>
 
-      <div className="mx-auto grid w-full max-w-7xl flex-1 gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[220px_minmax(0,1fr)_300px] lg:py-8">
-        {/* Presence rail */}
-        <aside className="flex flex-col gap-4 lg:sticky lg:top-20 lg:h-fit">
-          <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-            <TeacherPresence state={presence} level={voice.level} />
-            <p
-              className="mt-3 text-center text-[11px] leading-snug text-[var(--color-ink-muted)]"
-              aria-live="polite"
-            >
-              {presenceLine}
-            </p>
+      <div className="relative flex-none h-[40vh] lg:h-full lg:w-1/2 flex items-center justify-center border-b lg:border-b-0 lg:border-r border-[var(--color-border)]/20 p-8 overflow-hidden bg-[var(--color-canvas)]">
+        {activeVisual && (phase === "teaching" || phase === "question" || phase === "result") && activeVisual.mode !== "TEXT" ? (
+          <div className="w-full max-w-lg aspect-square">
+            <VisualCanvas
+              directive={activeVisual}
+              intentLabel={visualIntentText ? visualIntentLabel(visualIntentText as any) : null}
+              muted={visualMuted}
+              className="border-none bg-transparent"
+            />
           </div>
-          {voiceEnabled && voice.capabilities.anyVoice ? (
-            <p className="px-1 text-[11px] leading-snug text-[var(--color-ink-faint)]">
-              {voice.activeProvider.tts === "cloud" && voiceCloud.tts
-                ? `Voice: ${voiceCloud.tts}`
-                : voice.activeProvider.tts === "browser"
-                  ? "Voice: your browser"
-                  : "Voice output unavailable — captions only"}
-            </p>
-          ) : null}
-        </aside>
+        ) : (
+          <div className="w-[60vw] max-w-[500px] aspect-square">
+            <LumenCore size="hero" state={coreState as any} />
+          </div>
+        )}
+      </div>
 
-        {/* Centre: visual canvas + teaching panel */}
-        <main className="min-w-0 space-y-5">
-          {activeVisual &&
-          (phase === "teaching" ||
-            phase === "question" ||
-            phase === "result") ? (
-            <div className="space-y-1.5">
-              <VisualCanvas
-                directive={activeVisual}
-                intentLabel={
-                  visualIntentText
-                    ? visualIntentLabel(visualIntentText as VisualIntent)
-                    : null
-                }
-                muted={visualMuted}
-              />
-              {(phase === "teaching" || heldVisual?.from === "conversation") &&
-              visualRationaleText ? (
-                <p className="px-1 text-[11px] leading-snug text-[var(--color-accent)]">
-                  {visualRationaleText}
-                </p>
-              ) : null}
+      <div className="flex-1 lg:w-1/2 overflow-y-auto relative pt-16">
+        <div className="max-w-2xl mx-auto px-6 sm:px-12 py-12 lg:py-24 space-y-24 pb-48">
+          
+          {phase === "loading" && (
+            <div className="flex items-center gap-3 py-16 text-[var(--color-ink-muted)] font-mono text-[11px] uppercase tracking-widest">
+              <InlineSpinner label="Lumen is thinking..." />
             </div>
-          ) : null}
+          )}
 
-          {voiceEnabled && voice.caption && phase !== "question" ? (
-            <CaptionTrack
-              text={voice.caption}
-              spokenChars={voice.spokenChars}
-            />
-          ) : null}
+          {phase === "error" && (
+            <ErrorState title="This step didn't load" description={errorMsg ?? undefined} retry={() => void loadStep()} />
+          )}
 
-          <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5 sm:p-6">
-            {phase === "loading" ? (
-              <div className="flex items-center gap-3 py-16">
-                <InlineSpinner label={`${teachingStage.statusLine}…`} />
-              </div>
-            ) : null}
-
-            {phase === "error" ? (
-              <ErrorState
-                title="This step didn't load"
-                description={errorMsg ?? undefined}
-                retry={() => void loadStep()}
-              />
-            ) : null}
-
-            <motion.div
-              key={phase}
-              initial={reduce ? false : { opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: reduce ? 0 : 0.22 }}
-            >
-              {stepWhyNext ? (
-                <WhyNextCard
-                  explanation={stepWhyNext}
-                  personalizationNote={
-                    (phase === "teaching" || phase === "question") && step
-                      ? step.decision.personalizationNote
-                      : null
-                  }
-                  readinessNote={stepReadinessNote}
-                  className="mb-4"
-                />
-              ) : null}
-
-              {phase === "teaching" && step?.content ? (
-                <>
-                  <ConceptEyebrow
-                    title={step.content.title}
-                    action={step.decision.action}
-                  />
-                  <TeachingContent
-                    key={`${step.content.conceptKey}:${step.decision.action}:${step.content.title}`}
-                    content={step.content}
-                    citations={step.citations}
-                    onContinue={toContinue}
-                    continuing={busy}
-                    onRevealChange={setTeachingRevealed}
-                    hideVisual
-                  />
-                </>
-              ) : null}
-
-              {phase === "question" && step?.question ? (
-                <>
-                  <ConceptEyebrow
-                    title={step.question.conceptKey}
-                    action="ASK"
-                    label="Your turn"
-                  />
-                  <QuestionPanel
-                    question={step.question}
-                    citations={step.citations}
-                    onSubmit={submitAnswer}
-                    submitting={busy}
-                    errorMsg={errorMsg}
-                    voiceTranscript={voiceEnabled ? voiceAnswer : null}
-                    voiceSlot={
-                      voiceEnabled && voice.capabilities.recognition ? (
-                        <VoiceControls
-                          state={voice.state}
-                          level={voice.level}
-                          canListen={
-                            voice.state === "IDLE" || voice.state === "ERROR"
-                          }
-                          error={voice.error}
-                          onStart={() => {
-                            listenTargetRef.current = "question";
-                            voice.startListening();
-                          }}
-                          onStop={voice.stopListening}
-                          onRecover={voice.recover}
-                          hint="Speak your answer — it drops into the box for you to check."
-                        />
-                      ) : voiceEnabled ? (
-                        <p className="text-[11px] text-[var(--color-ink-faint)]">
-                          Voice input isn&apos;t available in this browser —
-                          type your answer.
-                        </p>
-                      ) : null
-                    }
-                  />
-                </>
-              ) : null}
-
-              {phase === "result" && result ? (
-                <>
-                  {voiceEnabled && voice.caption ? (
-                    <div className="mb-4">
-                      <CaptionTrack
-                        text={voice.caption}
-                        spokenChars={voice.spokenChars}
-                      />
-                    </div>
-                  ) : null}
-                  <EvaluationResult
-                    result={result}
-                    onContinue={toContinue}
-                    onSkip={() => setResultBeat(2)}
-                    continuing={busy}
-                    beat={effectiveBeat}
-                    previousStrategy={previousDecision?.strategy ?? null}
-                    previousAction={previousDecision?.action ?? null}
-                    previousRepresentationLabel={previousRepresentationLabel}
-                    headline={transitionHeadline(result)}
-                  />
-                  {learningEvent && effectiveBeat >= 1 ? (
-                    <LumenLearningSignal
-                      event={learningEvent}
-                      className="mt-5"
-                    />
-                  ) : null}
-                  {effectiveBeat >= 1 &&
-                  currentTrajectory &&
-                  currentTrajectory.points.length >= 2 ? (
-                    <div className="mt-5">
-                      <MasteryTrajectoryChart trajectory={currentTrajectory} />
-                    </div>
-                  ) : null}
-                </>
-              ) : null}
-
-              {phase === "complete" ? (
-                <div className="py-4 text-center">
-                  <p className="text-[11px] font-semibold tracking-wider text-[var(--color-accent)] uppercase">
-                    Lesson complete
-                  </p>
-                  <h2 className="mt-3 text-xl font-semibold tracking-tight">
-                    You&apos;ve worked through every concept
-                  </h2>
-                  <p className="mx-auto mt-2 max-w-sm text-[13px] leading-relaxed text-[var(--color-ink-muted)]">
-                    Lumen has updated what it knows about you. See how your
-                    understanding moved.
-                  </p>
-                  <div className="mt-6 flex flex-wrap justify-center gap-3">
-                    <LinkButton
-                      href={`/studio/session/${sessionId}/complete`}
-                      size="lg"
-                    >
-                      View session summary
-                    </LinkButton>
-                    <LinkButton href="/studio" variant="secondary" size="lg">
-                      Back to studio
-                    </LinkButton>
+          {(phase === "teaching" || phase === "question" || phase === "result") && step && (
+            <div className="flex flex-col gap-12">
+               {step.content && (
+                  <div className="font-editorial text-2xl sm:text-3xl lg:text-4xl leading-relaxed text-[var(--color-ink)]">
+                     <TeachingContent
+                       content={step.content}
+                       citations={step.citations}
+                       onContinue={toContinue}
+                       continuing={busy}
+                       hideVisual
+                       onRevealChange={setTeachingRevealed}
+                     />
                   </div>
-                </div>
-              ) : null}
-            </motion.div>
-          </div>
+               )}
 
-          {(phase === "teaching" || phase === "question") &&
-          currentConceptKey ? (
-            <AskLumen
-              sessionId={sessionId}
-              conceptTitle={currentConceptTitle ?? currentConceptKey}
-              onBusyChange={setConversationBusy}
-              onVisual={(r) => {
-                if (r.visual) {
-                  setHeldVisual({
-                    directive: r.visual,
-                    intent: r.visualIntent,
-                    rationale: r.visualRationale,
-                    from: "conversation",
-                  });
-                }
-              }}
-              voice={voiceEnabled ? voice : null}
-              voiceTranscript={voiceEnabled ? askLumenTranscript : null}
-              voiceSlot={
-                voiceEnabled && voice.capabilities.recognition ? (
-                  <VoiceControls
-                    state={voice.state}
-                    level={voice.level}
-                    canListen={
-                      voice.state === "IDLE" || voice.state === "ERROR"
-                    }
-                    error={voice.error}
-                    onStart={() => {
-                      listenTargetRef.current = "askLumen";
-                      voice.startListening();
-                    }}
-                    onStop={voice.stopListening}
-                    onRecover={voice.recover}
-                    hint="Speak your question — it drops into the box for you to check."
-                  />
-                ) : voiceEnabled ? (
-                  <p className="text-[11px] text-[var(--color-ink-faint)]">
-                    Voice input isn&apos;t available in this browser — type
-                    instead.
-                  </p>
-                ) : null
-              }
-            />
-          ) : null}
-        </main>
+               {phase === "teaching" && !step.question && (
+                  <div className="pt-8 border-t border-[var(--color-border)]/20">
+                     <Button onClick={toContinue} disabled={busy} size="lg" className="rounded-none px-12" variant="primary">
+                       Continue
+                     </Button>
+                  </div>
+               )}
 
-        {/* Right rail: learning signal + timeline + live map */}
-        <aside className="flex flex-col gap-4 lg:sticky lg:top-20 lg:max-h-[calc(100svh-6rem)] lg:overflow-y-auto lg:pb-4">
-          {phase === "result" && result ? (
-            <LearningSignalCard result={result} />
-          ) : null}
-          <LearnerStatePanel
-            snapshot={panelSnapshot}
-            decision={activeDecision}
-            concepts={concepts}
-            currentIndex={currentIndex}
-            approachTrail={approachTrail}
-            graph={graphState}
-            currentConceptKey={currentConceptKey}
-          />
-          {graphState ? (
-            <TeachingRoomMap
-              graph={graphState}
-              currentConceptKey={currentConceptKey}
-              relevanceNote={mapRelevance}
-            />
-          ) : null}
-          <SessionTimelinePanel events={events} />
-        </aside>
+               {(phase === "question" || phase === "result") && step.question && (
+                  <div className="pt-12 border-t border-[var(--color-border)]/30">
+                     <QuestionPanel
+                       question={step.question}
+                       citations={step.citations}
+                       onSubmit={submitAnswer}
+                       submitting={busy}
+                       errorMsg={errorMsg}
+                       voiceTranscript={voiceAnswer}
+                       voiceSlot={
+                         voiceEnabled && voice.capabilities.recognition ? (
+                           <VoiceControls
+                              state={voice.state}
+                              level={voice.level}
+                              canListen={voice.state === "IDLE" || voice.state === "ERROR"}
+                              error={voice.error}
+                              onStart={() => {
+                                listenTargetRef.current = "question";
+                                voice.startListening();
+                              }}
+                              onStop={() => voice.stopListening()}
+                              onRecover={() => voice.stopListening()}
+                            />
+                         ) : null
+                       }
+                     />
+                  </div>
+               )}
+
+               {phase === "result" && result && (
+                  <div className="pt-12 border-t border-[var(--color-border)]/30">
+                     {voiceEnabled && voice.caption && (
+                        <div className="mb-4">
+                           <CaptionTrack text={voice.caption} spokenChars={voice.spokenChars} />
+                        </div>
+                     )}
+                     <EvaluationResult
+                       result={result}
+                       onContinue={toContinue}
+                       onSkip={() => setResultBeat(2)}
+                       continuing={busy}
+                       beat={effectiveBeat}
+                       previousStrategy={previousDecision?.strategy ?? null}
+                       previousAction={previousDecision?.action ?? null}
+                       previousRepresentationLabel={previousRepresentationLabel}
+                       headline={transitionHeadline(result)}
+                     />
+                     {learningEvent && effectiveBeat >= 1 && (
+                        <LumenLearningSignal event={learningEvent} className="mt-8 border-none bg-transparent" />
+                     )}
+                     <div className="mt-12">
+                        <Button onClick={toContinue} disabled={busy} size="lg" className="rounded-none px-12" variant="primary">
+                          Next
+                        </Button>
+                     </div>
+                  </div>
+               )}
+            </div>
+          )}
+
+          {phase === "complete" && (
+            <div className="flex flex-col gap-8 py-24 text-center">
+              <h2 className="font-editorial text-5xl sm:text-6xl text-[var(--color-ink)]">Understood.</h2>
+              <p className="font-mono text-[12px] uppercase tracking-widest text-[var(--color-ink-muted)]">
+                 You have mastered this objective.
+              </p>
+              <div className="mt-8 flex justify-center">
+                 <LinkButton href="/studio" size="lg" className="rounded-none px-12 border-transparent bg-white text-[var(--color-canvas)] hover:bg-white/90">
+                   Return to Studio
+                 </LinkButton>
+              </div>
+            </div>
+          )}
+
+        </div>
       </div>
     </div>
   );

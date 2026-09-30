@@ -32,7 +32,7 @@ export function TeachingContent({
   const paragraphs = content.body.split(/\n{2,}/).filter(Boolean);
 
   const reveal = useStagedReveal(paragraphs.length, {
-    enabled: !reduce,
+    enabled: false,
     firstMs: 260,
     stepMs: 1150,
   });
