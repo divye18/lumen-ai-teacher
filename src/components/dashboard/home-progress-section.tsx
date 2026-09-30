@@ -2,10 +2,6 @@
 
 import { motion, useReducedMotion } from "framer-motion";
 
-import { Badge } from "@/components/ui/badge";
-import { MasteryMeter } from "@/components/ui/mastery-meter";
-import { CurriculumProgressBar } from "@/components/ui/curriculum-progress";
-import { Panel, SectionHeading } from "@/components/ui/surface";
 import { panelEntrance } from "@/lib/ui/motion";
 import type {
   ChapterProgress,
@@ -17,18 +13,8 @@ export interface MasterySummary {
   conceptCount: number;
 }
 
-/**
- * Home's "Your Progress" section (Milestone 19.3). Deliberately renders
- * curriculum progress and concept mastery as two visually and textually
- * separate panels — never a combined score. `chapterProgress` is 18.3e's
- * real engagement data; `masterySummary` reuses the mastery aggregate
- * `getStudioOverview` already assembles (no new mastery query here). If
- * neither is available, the whole section renders nothing — never a fake
- * empty progress bar.
- */
 export function HomeProgressSection({
   chapterProgress,
-  nextTopic,
   masterySummary,
 }: {
   chapterProgress: ChapterProgress | null;
@@ -39,56 +25,80 @@ export function HomeProgressSection({
   if (!chapterProgress && !masterySummary) return null;
 
   return (
-    <div className="flex flex-col gap-4">
-      <SectionHeading title="Your progress" />
-      <div className="grid gap-4 sm:grid-cols-2">
-        {chapterProgress ? (
-          <motion.div
-            initial={reduce ? false : panelEntrance.initial}
-            animate={panelEntrance.animate}
-            transition={panelEntrance.transition}
-          >
-            <Panel variant="progress" inset>
-              <CurriculumProgressBar
-                completed={chapterProgress.completedTopics}
-                total={chapterProgress.totalTopics}
+    <div className="flex flex-col gap-10 border-t border-[var(--color-border)] pt-8 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-8 lg:pl-12">
+      {chapterProgress ? (
+        <motion.div
+          initial={reduce ? false : panelEntrance.initial}
+          animate={panelEntrance.animate}
+          transition={panelEntrance.transition}
+          className="flex flex-col gap-4"
+        >
+          <p className="text-[length:var(--text-label)] font-semibold tracking-wide text-[var(--color-ink-muted)] uppercase">
+            Curriculum Progress
+          </p>
+          <div className="flex flex-col gap-2">
+            <div className="flex justify-between text-[length:var(--text-meta)] text-[var(--color-ink)]">
+              <span>
+                {chapterProgress.completedTopics} of{" "}
+                {chapterProgress.totalTopics} topics completed
+              </span>
+              <span>
+                {chapterProgress.totalTopics > 0
+                  ? Math.round(
+                      (chapterProgress.completedTopics /
+                        chapterProgress.totalTopics) *
+                        100,
+                    )
+                  : 0}
+                %
+              </span>
+            </div>
+            <div className="h-[2px] w-full bg-[var(--color-border)]">
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{
+                  width: `${chapterProgress.totalTopics > 0 ? (chapterProgress.completedTopics / chapterProgress.totalTopics) * 100 : 0}%`,
+                }}
+                transition={{ duration: 0.8, ease: "easeOut" }}
+                className="h-full bg-[var(--color-learning)]"
               />
-              <div className="mt-3">
-                {nextTopic ? (
-                  <p className="text-[length:var(--text-meta)] text-[var(--color-ink-muted)]">
-                    Next: {nextTopic.title}
-                  </p>
-                ) : (
-                  <Badge tone="positive" dot>
-                    Chapter complete
-                  </Badge>
-                )}
-              </div>
-            </Panel>
-          </motion.div>
-        ) : null}
+            </div>
+          </div>
+        </motion.div>
+      ) : null}
 
-        {masterySummary ? (
-          <motion.div
-            initial={reduce ? false : panelEntrance.initial}
-            animate={panelEntrance.animate}
-            transition={panelEntrance.transition}
-          >
-            <Panel variant="elevated" inset>
-              <p className="text-[length:var(--text-label)] font-semibold tracking-[0.08em] text-[var(--color-ink-muted)] uppercase">
-                Concept mastery
-              </p>
-              <div className="mt-3">
-                <MasteryMeter value={masterySummary.averagePoints} />
-              </div>
-              <p className="mt-2 text-[length:var(--text-meta)] text-[var(--color-ink-muted)]">
-                Average across {masterySummary.conceptCount} concept
-                {masterySummary.conceptCount === 1 ? "" : "s"}
-              </p>
-            </Panel>
-          </motion.div>
-        ) : null}
-      </div>
+      {masterySummary ? (
+        <motion.div
+          initial={reduce ? false : panelEntrance.initial}
+          animate={panelEntrance.animate}
+          transition={panelEntrance.transition}
+          className="flex flex-col gap-4"
+        >
+          <p className="text-[length:var(--text-label)] font-semibold tracking-wide text-[var(--color-ink-muted)] uppercase">
+            Concept Mastery
+          </p>
+          <div className="flex flex-col gap-2">
+            <div className="flex justify-between text-[length:var(--text-meta)] text-[var(--color-ink)]">
+              <span>Average Aggregate</span>
+              <span className="font-semibold text-[var(--color-achievement)]">
+                {masterySummary.averagePoints}
+              </span>
+            </div>
+            <div className="h-[2px] w-full bg-[var(--color-border)]">
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${masterySummary.averagePoints}%` }}
+                transition={{ duration: 0.8, ease: "easeOut" }}
+                className="h-full bg-[var(--color-achievement)]"
+              />
+            </div>
+            <p className="text-[length:var(--text-meta)] text-[var(--color-ink-faint)]">
+              Across {masterySummary.conceptCount} concept
+              {masterySummary.conceptCount === 1 ? "" : "s"}
+            </p>
+          </div>
+        </motion.div>
+      ) : null}
     </div>
   );
 }

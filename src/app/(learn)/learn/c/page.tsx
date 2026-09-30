@@ -28,7 +28,7 @@ export default async function CurriculumClassPage() {
         <p className="text-[length:var(--text-label)] font-semibold tracking-[0.08em] text-[var(--color-accent)] uppercase">
           NCERT curriculum
         </p>
-        <h1 className="mt-1 text-[length:var(--text-display)] font-semibold tracking-tight text-[var(--color-ink)]">
+        <h1 className="font-editorial mt-1 text-[length:var(--text-hero)] font-medium tracking-tight text-[var(--color-ink)]">
           Choose your class
         </h1>
         <p className="mt-1 text-[length:var(--text-body)] text-[var(--color-ink-muted)]">

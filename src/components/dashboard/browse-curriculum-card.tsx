@@ -2,15 +2,9 @@
 
 import { motion, useReducedMotion } from "framer-motion";
 
-import { LinkButton } from "@/components/ui/button";
-import { Panel } from "@/components/ui/surface";
 import { panelEntrance } from "@/lib/ui/motion";
+import Link from "next/link";
 
-/**
- * Home's "Browse Curriculum" entry (Milestone 19.3). No data query needed —
- * `/learn/c` already resolves the real Class/Subject/Chapter/Topic
- * hierarchy itself; this is just a static, always-correct entry point.
- */
 export function BrowseCurriculumCard() {
   const reduce = useReducedMotion();
   return (
@@ -19,18 +13,29 @@ export function BrowseCurriculumCard() {
       animate={panelEntrance.animate}
       transition={panelEntrance.transition}
     >
-      <Panel inset>
-        <p className="text-[15px] font-medium text-[var(--color-ink)]">
-          Browse curriculum
-        </p>
-        <p className="mt-1 text-[13px] text-[var(--color-ink-muted)]">
-          Explore Class → Subject → Chapter → Topic and choose what to learn
-          next.
-        </p>
-        <LinkButton href="/learn/c" variant="secondary" className="mt-4">
-          Browse curriculum
-        </LinkButton>
-      </Panel>
+      <div className="group relative mt-2 flex w-full flex-col border-t border-[var(--color-border)] pt-6">
+        <div className="flex items-baseline gap-4">
+          <span className="text-[length:var(--text-meta)] font-medium text-[var(--color-ink-faint)]">
+            01
+          </span>
+          <div className="flex-1">
+            <p className="text-[length:var(--text-title)] font-medium text-[var(--color-ink)] transition-colors group-hover:text-[var(--color-learning)]">
+              Browse Curriculum
+            </p>
+            <p className="mt-1 max-w-sm text-[length:var(--text-body)] text-[var(--color-ink-muted)]">
+              Explore the full syllabus hierarchy and pick your next topic.
+            </p>
+          </div>
+          <div className="shrink-0">
+            <span className="text-[length:var(--text-meta)] font-medium text-[var(--color-learning)] opacity-0 transition-opacity group-hover:opacity-100">
+              Explore ➔
+            </span>
+          </div>
+        </div>
+        <Link href="/learn/c" className="absolute inset-0 z-10">
+          <span className="sr-only">Browse curriculum</span>
+        </Link>
+      </div>
     </motion.div>
   );
 }

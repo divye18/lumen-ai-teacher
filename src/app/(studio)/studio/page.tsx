@@ -38,9 +38,6 @@ export default async function StudioPage() {
 
   const firstName = overview.learnerName?.split(" ")[0];
 
-  // Reuses the mastery aggregate `getStudioOverview` already assembled —
-  // no new mastery query. Only concepts with real evidence (attempted at
-  // least once) count, so an unassessed concept never dilutes the average.
   const assessedConcepts = overview.concepts.filter((c) => c.assessed);
   const masterySummary: MasterySummary | null =
     assessedConcepts.length > 0
@@ -54,33 +51,43 @@ export default async function StudioPage() {
       : null;
 
   return (
-    <div className="flex flex-col gap-8">
-      <header>
-        <h1 className="text-xl font-semibold tracking-tight">
-          {firstName ? `${greeting()}, ${firstName}` : greeting()}
-        </h1>
-        <p className="mt-1 text-[13px] text-[var(--color-ink-muted)]">
-          {curriculumHome.continueLearning
-            ? "Pick up where you left off."
-            : "Choose a topic to start learning."}
-        </p>
-      </header>
+    <div className="flex flex-col gap-12 pb-12 sm:gap-16">
+      <div className="grid grid-cols-1 gap-12 lg:grid-cols-12 lg:gap-16">
+        <div className="flex flex-col items-start pt-4 lg:col-span-7">
+          <header className="mb-10 w-full">
+            <p className="mb-3 text-[length:var(--text-label)] font-semibold tracking-[0.1em] text-[var(--color-ink-muted)] uppercase">
+              Learning Studio
+            </p>
+            <h1 className="text-[length:var(--text-hero)] leading-[1.05] font-medium tracking-tight text-balance text-[var(--color-ink)]">
+              {curriculumHome.continueLearning
+                ? "Continue your study of Physics."
+                : "Begin your curriculum exploration."}
+            </h1>
+            <p className="mt-4 text-[length:var(--text-title)] text-[var(--color-ink-muted)]">
+              {firstName ? `${greeting()}, ${firstName}.` : `${greeting()}.`}
+            </p>
+          </header>
 
-      <CurriculumContinueLearningCard
-        continueLearning={curriculumHome.continueLearning}
-        chapterProgress={curriculumHome.chapterProgress}
-      />
+          <div className="flex w-full flex-col gap-8">
+            <CurriculumContinueLearningCard
+              continueLearning={curriculumHome.continueLearning}
+              chapterProgress={curriculumHome.chapterProgress}
+            />
+            <BrowseCurriculumCard />
+          </div>
+        </div>
 
-      <HomeProgressSection
-        chapterProgress={curriculumHome.chapterProgress}
-        nextTopic={curriculumHome.nextTopic}
-        masterySummary={masterySummary}
-      />
-
-      <BrowseCurriculumCard />
+        <div className="flex flex-col pt-4 lg:col-span-5">
+          <HomeProgressSection
+            chapterProgress={curriculumHome.chapterProgress}
+            nextTopic={curriculumHome.nextTopic}
+            masterySummary={masterySummary}
+          />
+        </div>
+      </div>
 
       {overview.hasAnyData ? (
-        <div className="flex flex-col gap-6 border-t border-[var(--color-border)] pt-8">
+        <div className="flex flex-col gap-8 border-t border-[var(--color-border)] pt-12">
           <RecommendedAction recommendation={overview.recommendation} />
 
           {overview.activeSession ? (
@@ -110,7 +117,7 @@ export default async function StudioPage() {
           ) : null}
         </div>
       ) : (
-        <div className="flex flex-col gap-6 border-t border-[var(--color-border)] pt-8">
+        <div className="flex flex-col gap-8 border-t border-[var(--color-border)] pt-12">
           <DemoCard />
           <EmptyStudio name={overview.learnerName} />
         </div>

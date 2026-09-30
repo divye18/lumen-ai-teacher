@@ -6,16 +6,19 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Panel } from "@/components/ui/surface";
 import {
-  type LearningModeId,
   ModeSelector,
+  type LearningModeId,
 } from "@/components/curriculum/mode-selector";
-import { apiFetch } from "@/lib/ui/api-client";
 import { composeCurriculumTopic } from "@/lib/curriculum/compose-topic";
-import { cardEntrance, cardHover, sectionEntrance } from "@/lib/ui/motion";
-import type { TopicStatus } from "@/lib/curriculum/topic-progress";
+import {
+  staggerContainer,
+  staggerItem,
+  sectionEntrance,
+} from "@/lib/ui/motion";
 import { cn } from "@/lib/ui/cn";
+import { apiFetch } from "@/lib/ui/api-client";
+import type { TopicStatus } from "@/lib/curriculum/topic-progress";
 
 interface CreateLessonResponse {
   ok: true;
@@ -30,19 +33,16 @@ interface StartSessionResponse {
 export interface CurriculumTopicData {
   id: string;
   title: string;
-  /** Curriculum ENGAGEMENT progress (18.3d) — never mastery. Defaults to
-   * NOT_STARTED if the caller doesn't have it (keeps this component usable
-   * without forcing every call site to compute status). */
   status?: TopicStatus;
 }
 
 export const STATUS_BADGE: Record<
   TopicStatus,
-  { tone: "neutral" | "accent" | "positive"; label: string }
+  { label: string; tone: React.ComponentProps<typeof Badge>["tone"] }
 > = {
-  NOT_STARTED: { tone: "neutral", label: "Not started" },
-  IN_PROGRESS: { tone: "accent", label: "In progress" },
-  COMPLETED: { tone: "positive", label: "Completed" },
+  NOT_STARTED: { label: "Not started", tone: "neutral" },
+  IN_PROGRESS: { label: "In progress", tone: "learning" },
+  COMPLETED: { label: "Completed", tone: "positive" },
 };
 
 export function ctaLabel(status: TopicStatus): string {
@@ -51,20 +51,6 @@ export function ctaLabel(status: TopicStatus): string {
   return "Start learning";
 }
 
-/**
- * Terminal NCERT Curriculum Explorer screen (Milestone 18.2, status/CTA
- * evolved in 19.2). Turns a selected topic into an actual lesson + teaching
- * session via the existing, completely unchanged `/api/lessons` ->
- * `/api/teaching/session` pipeline — the same two-call pattern
- * `LessonPlanView` already uses to start a planned lesson. No new teaching
- * engine, no curriculum-specific Teaching Room behavior: the orchestrator
- * never learns this session came from the Curriculum Explorer.
- *
- * `status` (18.3d curriculum ENGAGEMENT progress) only changes the visible
- * badge/CTA label — it never changes the request payload or the two-call
- * sequence itself, and it is never mastery (see `curriculum-progress.tsx`
- * for why those two signals are deliberately rendered differently).
- */
 export function CurriculumTopicList({
   chapterTitle,
   topics,
@@ -80,12 +66,7 @@ export function CurriculumTopicList({
   const [modeByTopic, setModeByTopic] = useState<
     Record<string, LearningModeId>
   >({});
-  /**
-   * A ref (not just the `startingId` state) guards against a double-click
-   * landing before React commits the re-render that disables the button —
-   * two clicks dispatched in the same tick both read the same stale state.
-   * This is a plain same-component in-flight flag, not a cross-request lock.
-   */
+
   const inFlight = useRef(false);
 
   async function startLearning(topic: CurriculumTopicData) {
@@ -132,66 +113,59 @@ export function CurriculumTopicList({
   }
 
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+    <motion.div
+      initial="hidden"
+      animate="visible"
+      variants={staggerContainer.variants}
+      className="mt-4 flex w-full flex-col border-t border-[var(--color-border)]"
+    >
       {topics.map((topic, index) => {
         const starting = startingId === topic.id;
         const error = errorById[topic.id];
         const status = topic.status ?? "NOT_STARTED";
         const statusBadge = STATUS_BADGE[status];
-        const entrance = cardEntrance(index);
         const expanded = expandedId === topic.id;
         const selectedMode = modeByTopic[topic.id] ?? "explain";
+        const num = (index + 1).toString().padStart(2, "0");
 
         return (
           <motion.div
             key={topic.id}
-            initial={reduce ? false : entrance.initial}
-            animate={entrance.animate}
-            transition={entrance.transition}
-            whileHover={reduce ? undefined : cardHover}
+            variants={staggerItem.variants}
+            className={cn(
+              "group relative flex flex-col gap-4 border-b border-[var(--color-border)] px-4 py-6 transition-colors hover:bg-[var(--color-subtle)] sm:flex-row sm:items-start sm:gap-8 sm:px-6",
+              expanded && "bg-[var(--color-subtle)]",
+            )}
           >
-            <Panel
-              variant="elevated"
-              className={cn(
-                "flex h-full flex-col justify-between gap-4 p-5",
-                status === "IN_PROGRESS" &&
-                  "border-[color-mix(in_oklab,var(--color-learning)_35%,var(--color-border))]",
-                status === "COMPLETED" &&
-                  "border-[color-mix(in_oklab,var(--color-positive)_28%,var(--color-border))]",
-              )}
-            >
-              {/* Hierarchy: title -> status -> mode choice -> primary
-                  action. The mode toggle is a distinct, smaller control so
-                  it never competes with the title for visual weight. */}
-              <div>
-                <p className="text-[length:var(--text-subtitle)] font-semibold tracking-tight text-[var(--color-ink)]">
-                  {topic.title}
-                </p>
-                <div className="mt-1.5 flex flex-wrap gap-1.5">
-                  <Badge tone="neutral">
-                    Topic {index + 1} of {topics.length}
-                  </Badge>
-                  <Badge tone={statusBadge.tone} dot>
-                    {statusBadge.label}
-                  </Badge>
-                </div>
-              </div>
+            <div className="pt-0.5 text-[length:var(--text-meta)] font-semibold text-[var(--color-ink-faint)] sm:w-8">
+              {num}.
+            </div>
 
-              <div>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setExpandedId((prev) =>
-                      prev === topic.id ? null : topic.id,
-                    )
-                  }
-                  aria-expanded={expanded}
-                  className="flex items-center gap-1 text-[length:var(--text-meta)] font-medium text-[var(--color-ink-muted)] transition-colors hover:text-[var(--color-ink)]"
-                >
+            <div className="flex min-w-0 flex-1 flex-col">
+              <button
+                type="button"
+                onClick={() =>
+                  setExpandedId((prev) => (prev === topic.id ? null : topic.id))
+                }
+                aria-expanded={expanded}
+                className="flex w-full items-start justify-between rounded text-left focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none"
+              >
+                <div>
+                  <h3 className="text-[length:var(--text-title)] font-medium tracking-tight text-[var(--color-ink)] transition-colors group-hover:text-[var(--color-learning)]">
+                    {topic.title}
+                  </h3>
+                  <div className="mt-1 flex items-center gap-2">
+                    <Badge tone={statusBadge.tone} dot>
+                      {statusBadge.label}
+                    </Badge>
+                  </div>
+                </div>
+
+                <div className="ml-4 shrink-0 pt-1 text-[var(--color-ink-faint)] group-hover:text-[var(--color-ink-muted)]">
                   <motion.svg
                     aria-hidden
                     viewBox="0 0 12 12"
-                    className="size-3"
+                    className="size-4"
                     animate={{ rotate: expanded ? 90 : 0 }}
                     transition={{ duration: reduce ? 0 : 0.15 }}
                   >
@@ -204,58 +178,65 @@ export function CurriculumTopicList({
                       strokeLinejoin="round"
                     />
                   </motion.svg>
-                  How do you want to learn this?
-                </button>
+                </div>
+              </button>
 
-                <AnimatePresence initial={false}>
-                  {expanded ? (
-                    <motion.div
-                      key="modes"
-                      initial={reduce ? false : { opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
-                      exit={reduce ? undefined : { opacity: 0, height: 0 }}
-                      transition={sectionEntrance.transition}
-                      className="overflow-hidden"
-                    >
-                      <ModeSelector
-                        selected={selectedMode}
-                        onSelect={(mode) =>
-                          setModeByTopic((prev) => ({
-                            ...prev,
-                            [topic.id]: mode,
-                          }))
-                        }
-                        className="mt-3"
-                      />
-                    </motion.div>
-                  ) : null}
-                </AnimatePresence>
-              </div>
-
-              <div>
-                <Button
-                  onClick={() => startLearning(topic)}
-                  loading={starting}
-                  disabled={startingId !== null && !starting}
-                  variant={status === "COMPLETED" ? "secondary" : "primary"}
-                  size="sm"
-                  className="w-full"
-                >
-                  {ctaLabel(status)}
-                </Button>
-                {error ? (
-                  <p
-                    role="alert"
-                    className="mt-2 text-[12px] text-[var(--color-danger)]"
+              <AnimatePresence initial={false}>
+                {expanded ? (
+                  <motion.div
+                    key="expanded"
+                    initial={reduce ? false : { opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={reduce ? undefined : { opacity: 0, height: 0 }}
+                    transition={sectionEntrance.transition}
+                    className="overflow-hidden pt-6"
                   >
-                    {error}
-                  </p>
+                    <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="min-w-0 flex-1">
+                        <p className="mb-2 text-[length:var(--text-meta)] font-semibold tracking-wide text-[var(--color-ink-muted)] uppercase">
+                          Learning Approach
+                        </p>
+                        <ModeSelector
+                          selected={selectedMode}
+                          onSelect={(mode) =>
+                            setModeByTopic((prev) => ({
+                              ...prev,
+                              [topic.id]: mode,
+                            }))
+                          }
+                        />
+                      </div>
+
+                      <div className="flex w-full shrink-0 flex-col gap-2 lg:w-48">
+                        <Button
+                          onClick={() => startLearning(topic)}
+                          loading={starting}
+                          disabled={startingId !== null && !starting}
+                          variant={
+                            status === "COMPLETED" ? "secondary" : "primary"
+                          }
+                          size="md"
+                          className="w-full"
+                        >
+                          {ctaLabel(status)}
+                        </Button>
+                        {error ? (
+                          <p
+                            role="alert"
+                            className="text-center text-[12px] text-[var(--color-danger)]"
+                          >
+                            {error}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                  </motion.div>
                 ) : null}
-              </div>
-            </Panel>
+              </AnimatePresence>
+            </div>
           </motion.div>
         );
       })}
-    </div>
+    </motion.div>
   );
 }

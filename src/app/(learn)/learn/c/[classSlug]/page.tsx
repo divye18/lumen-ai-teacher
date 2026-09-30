@@ -39,7 +39,7 @@ export default async function CurriculumSubjectPage({
       />
 
       <header>
-        <h1 className="text-[length:var(--text-display)] font-semibold tracking-tight text-[var(--color-ink)]">
+        <h1 className="font-editorial text-[length:var(--text-hero)] font-medium tracking-tight text-[var(--color-ink)]">
           {classNode.title}
         </h1>
         <p className="mt-1 text-[length:var(--text-body)] text-[var(--color-ink-muted)]">

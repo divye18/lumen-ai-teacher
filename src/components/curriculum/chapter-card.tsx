@@ -5,27 +5,17 @@ import { motion, useReducedMotion } from "framer-motion";
 
 import { Badge } from "@/components/ui/badge";
 import { LinkButton } from "@/components/ui/button";
-import { CurriculumProgressBar } from "@/components/ui/curriculum-progress";
-import { Panel } from "@/components/ui/surface";
-import { cardEntrance, cardHover } from "@/lib/ui/motion";
+import { staggerItem } from "@/lib/ui/motion";
 
 export interface ChapterCardData {
   id: string;
   title: string;
-  /** The chapter's own route — also where "Continue: ..." links, since the
-   * terminal topic route (this same page) is where a student actually acts
-   * on a specific topic; there is no separate per-topic route. */
   href: string;
   totalTopics: number;
   completedTopics: number;
-  /** From 18.3e's `nextTopic` — `null` means every active topic is
-   * COMPLETED. Title only; the CTA always links to `href` above. */
   nextTopicTitle: string | null;
 }
 
-/** Pure: a chapter reads as "complete" only once it has at least one active
- * topic AND every one of them is done (no next topic left to recommend). A
- * chapter with zero topics is never "complete" — it's just empty. */
 export function isChapterComplete(
   totalTopics: number,
   nextTopicTitle: string | null,
@@ -33,11 +23,6 @@ export function isChapterComplete(
   return totalTopics > 0 && nextTopicTitle === null;
 }
 
-/**
- * One chapter's curriculum ENGAGEMENT progress (18.3e) — never mastery.
- * `CurriculumProgressBar` (19.1) is the only progress visual here;
- * `MasteryMeter` is never used for this.
- */
 export function ChapterCard({
   chapter,
   index = 0,
@@ -46,54 +31,62 @@ export function ChapterCard({
   index?: number;
 }) {
   const reduce = useReducedMotion();
-  const entrance = cardEntrance(index);
   const isComplete = isChapterComplete(
     chapter.totalTopics,
     chapter.nextTopicTitle,
   );
 
+  const num = (index + 1).toString().padStart(2, "0");
+
   return (
     <motion.div
-      initial={reduce ? false : entrance.initial}
-      animate={entrance.animate}
-      transition={entrance.transition}
-      whileHover={reduce ? undefined : cardHover}
+      variants={staggerItem.variants}
+      className="group relative flex flex-col gap-4 border-b border-[var(--color-border)] px-4 py-8 transition-colors hover:bg-[var(--color-subtle)] sm:flex-row sm:items-center sm:gap-8 sm:px-6"
     >
-      <Panel
-        variant="elevated"
-        className="flex h-full flex-col justify-between gap-4 p-5"
-      >
-        <div>
-          <Link
-            href={chapter.href}
-            className="text-[length:var(--text-subtitle)] font-semibold tracking-tight text-[var(--color-ink)] transition-colors hover:text-[var(--color-accent)]"
-          >
-            {chapter.title}
-          </Link>
+      <div className="pt-1 text-[length:var(--text-meta)] font-semibold text-[var(--color-ink-faint)] sm:w-8 sm:pt-0">
+        {num}.
+      </div>
 
+      <div className="flex min-w-0 flex-1 flex-col">
+        <Link
+          href={chapter.href}
+          className="text-[length:var(--text-title)] font-medium tracking-tight text-[var(--color-ink)] transition-colors before:absolute before:inset-0 before:z-10 hover:text-[var(--color-learning)]"
+        >
+          {chapter.title}
+        </Link>
+        <div className="mt-1 flex items-center gap-3">
+          <span className="text-[length:var(--text-meta)] text-[var(--color-ink-muted)]">
+            {chapter.completedTopics} / {chapter.totalTopics} topics
+          </span>
           {chapter.totalTopics > 0 ? (
-            <div className="mt-4">
-              <CurriculumProgressBar
-                completed={chapter.completedTopics}
-                total={chapter.totalTopics}
-                size="sm"
+            <div className="h-[2px] w-24 bg-[var(--color-border)]">
+              <div
+                className="h-full bg-[var(--color-learning)]"
+                style={{
+                  width: `${(chapter.completedTopics / chapter.totalTopics) * 100}%`,
+                }}
               />
             </div>
           ) : null}
         </div>
+      </div>
 
-        <div>
-          {isComplete ? (
-            <Badge tone="positive" dot>
-              Chapter complete
-            </Badge>
-          ) : chapter.nextTopicTitle ? (
-            <LinkButton href={chapter.href} size="sm" className="w-full">
-              Continue: {chapter.nextTopicTitle}
-            </LinkButton>
-          ) : null}
-        </div>
-      </Panel>
+      <div className="relative z-20 mt-4 shrink-0 sm:mt-0">
+        {isComplete ? (
+          <Badge tone="positive" dot>
+            Complete
+          </Badge>
+        ) : chapter.nextTopicTitle ? (
+          <LinkButton
+            href={chapter.href}
+            size="sm"
+            variant="secondary"
+            className="w-full sm:w-auto"
+          >
+            Continue Topic
+          </LinkButton>
+        ) : null}
+      </div>
     </motion.div>
   );
 }

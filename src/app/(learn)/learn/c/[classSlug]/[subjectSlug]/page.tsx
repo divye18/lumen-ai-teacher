@@ -13,6 +13,8 @@ import {
 import { getSupabaseServerClient } from "@/lib/db/server";
 import { getNcertChapterLevel, nodeSlug } from "@/lib/curriculum/ncert-browser";
 import { getChapterProgressForUser } from "@/lib/curriculum/chapter-progress";
+import * as motion from "framer-motion/client";
+import { staggerContainer } from "@/lib/ui/motion";
 
 export const metadata: Metadata = { title: "Choose a chapter" };
 export const dynamic = "force-dynamic";
@@ -40,9 +42,6 @@ export default async function CurriculumChapterPage({
 
   const { classNode, subjectNode, chapters, source } = level.value;
 
-  // 18.3e chapter ENGAGEMENT progress — never mastery. One call per chapter
-  // (bounded/parallelized via Promise.all); fine at the current pilot's
-  // scale, per the 19.2 audit's explicit scoping.
   const lessons = createLessonStore(supabase);
   const chapterCards = await Promise.all(
     chapters.map(async (chapter) => {
@@ -86,10 +85,10 @@ export default async function CurriculumChapterPage({
       />
 
       <header>
-        <h1 className="text-[length:var(--text-display)] font-semibold tracking-tight text-[var(--color-ink)]">
+        <h1 className="font-editorial text-[length:var(--text-hero)] font-medium tracking-tight text-[var(--color-ink)]">
           {subjectNode.title}
         </h1>
-        <p className="mt-1 text-[length:var(--text-body)] text-[var(--color-ink-muted)]">
+        <p className="mt-2 text-[length:var(--text-subtitle)] text-[var(--color-ink-muted)]">
           Choose a chapter to see its topics.
         </p>
       </header>
@@ -100,11 +99,16 @@ export default async function CurriculumChapterPage({
           description="This subject doesn't have any chapters yet."
         />
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <motion.div
+          initial="hidden"
+          animate="visible"
+          variants={staggerContainer.variants}
+          className="mt-4 flex w-full flex-col border-t border-[var(--color-border)]"
+        >
           {chapterCards.map((chapter, index) => (
             <ChapterCard key={chapter.id} chapter={chapter} index={index} />
           ))}
-        </div>
+        </motion.div>
       )}
     </CurriculumPageTransition>
   );

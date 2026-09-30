@@ -4,28 +4,16 @@ import Link from "next/link";
 import { motion, useReducedMotion } from "framer-motion";
 
 import { Badge } from "@/components/ui/badge";
-import { Panel } from "@/components/ui/surface";
-import { cardEntrance, cardHover } from "@/lib/ui/motion";
-import { cn } from "@/lib/ui/cn";
+import { staggerContainer, staggerItem } from "@/lib/ui/motion";
 
 export interface CurriculumNodeCardData {
   id: string;
   title: string;
-  /** Where this card navigates. Omit for a non-interactive, terminal card
-   * (the Topic level in 18.1 — no destination exists yet). */
   href?: string;
   subtitle?: string;
   badge?: string;
 }
 
-/**
- * Responsive grid of curriculum-node cards (Class/Subject levels — Chapter
- * cards moved to the dedicated `ChapterCard` in 19.2, since chapters need a
- * genuinely different shape: a progress bar + a next-topic CTA rather than
- * a plain navigation link). Built on the 19.1 `Panel` primitive — no new
- * design system. Content is always caller-supplied real node data; nothing
- * here is hardcoded.
- */
 export function CurriculumNodeGrid({
   items,
 }: {
@@ -34,54 +22,51 @@ export function CurriculumNodeGrid({
   const reduce = useReducedMotion();
 
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+    <motion.div
+      initial={reduce ? "visible" : "hidden"}
+      animate="visible"
+      variants={staggerContainer.variants}
+      className="flex w-full flex-col border-t border-[var(--color-border)]"
+    >
       {items.map((item, index) => {
-        const content = (
-          <>
-            <p className="text-[length:var(--text-subtitle)] font-semibold tracking-tight text-[var(--color-ink)]">
-              {item.title}
-            </p>
-            {item.subtitle ? (
-              <p className="mt-1 text-[length:var(--text-meta)] text-[var(--color-ink-muted)]">
-                {item.subtitle}
-              </p>
-            ) : null}
-            {item.badge ? (
-              <Badge className="mt-3" tone="neutral">
-                {item.badge}
-              </Badge>
-            ) : null}
-          </>
-        );
-
-        const panelClasses = cn(
-          "h-full p-5 transition-[border-color,box-shadow] duration-200",
-          item.href && "hover:border-[var(--color-accent)]",
-        );
-        const entrance = cardEntrance(index);
-
+        const num = (index + 1).toString().padStart(2, "0");
         return (
           <motion.div
             key={item.id}
-            initial={reduce ? false : entrance.initial}
-            animate={entrance.animate}
-            transition={entrance.transition}
-            whileHover={reduce || !item.href ? undefined : cardHover}
+            variants={staggerItem.variants}
+            className="group relative flex flex-col gap-4 border-b border-[var(--color-border)] py-6 transition-colors hover:bg-[var(--color-subtle)] sm:flex-row sm:items-center sm:gap-6"
           >
+            <div className="pl-4 text-[length:var(--text-meta)] font-semibold text-[var(--color-ink-faint)] sm:w-8">
+              {num}.
+            </div>
+            <div className="flex flex-1 flex-col px-4 sm:px-0">
+              <p className="text-[length:var(--text-title)] font-medium tracking-tight text-[var(--color-ink)] transition-colors group-hover:text-[var(--color-learning)]">
+                {item.title}
+              </p>
+              {item.subtitle ? (
+                <p className="mt-1 text-[length:var(--text-body)] text-[var(--color-ink-muted)]">
+                  {item.subtitle}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="flex items-center justify-between gap-6 px-4 sm:justify-end sm:pr-6">
+              {item.badge ? <Badge tone="neutral">{item.badge}</Badge> : null}
+              {item.href ? (
+                <span className="hidden text-[length:var(--text-meta)] font-medium text-[var(--color-learning)] opacity-0 transition-opacity group-hover:opacity-100 sm:block">
+                  Explore ➔
+                </span>
+              ) : null}
+            </div>
+
             {item.href ? (
-              <Link href={item.href} className="block h-full">
-                <Panel variant="elevated" className={panelClasses}>
-                  {content}
-                </Panel>
+              <Link href={item.href} className="absolute inset-0 z-10">
+                <span className="sr-only">Explore {item.title}</span>
               </Link>
-            ) : (
-              <Panel variant="quiet" className={panelClasses}>
-                {content}
-              </Panel>
-            )}
+            ) : null}
           </motion.div>
         );
       })}
-    </div>
+    </motion.div>
   );
 }

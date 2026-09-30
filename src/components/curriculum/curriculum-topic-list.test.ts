@@ -23,7 +23,7 @@ describe("STATUS_BADGE", () => {
       label: "Not started",
     });
     expect(STATUS_BADGE.IN_PROGRESS).toEqual({
-      tone: "accent",
+      tone: "learning",
       label: "In progress",
     });
     expect(STATUS_BADGE.COMPLETED).toEqual({
