@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { motion, useReducedMotion } from "framer-motion";
 
 import { Badge } from "@/components/ui/badge";
 import { staggerContainer, staggerItem } from "@/lib/ui/motion";
@@ -19,21 +18,14 @@ export function CurriculumNodeGrid({
 }: {
   items: CurriculumNodeCardData[];
 }) {
-  const reduce = useReducedMotion();
-
   return (
-    <motion.div
-      initial={reduce ? "visible" : "hidden"}
-      animate="visible"
-      variants={staggerContainer.variants}
-      className="flex w-full flex-col border-t border-[var(--color-border)]"
-    >
+    <div className="flex w-full flex-col border-t border-[var(--color-border)]">
       {items.map((item, index) => {
         const num = (index + 1).toString().padStart(2, "0");
         return (
-          <motion.div
+          <div
             key={item.id}
-            variants={staggerItem.variants}
+
             className="group relative flex flex-col gap-4 border-b border-[var(--color-border)] py-6 transition-colors hover:bg-[var(--color-subtle)] sm:flex-row sm:items-center sm:gap-6"
           >
             <div className="pl-4 text-[length:var(--text-meta)] font-semibold text-[var(--color-ink-faint)] sm:w-8">
@@ -64,9 +56,9 @@ export function CurriculumNodeGrid({
                 <span className="sr-only">Explore {item.title}</span>
               </Link>
             ) : null}
-          </motion.div>
+          </div>
         );
       })}
-    </motion.div>
+    </div>
   );
 }

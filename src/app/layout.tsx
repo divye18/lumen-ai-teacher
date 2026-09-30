@@ -35,6 +35,8 @@ export const viewport: Viewport = {
   ],
 };
 
+import { GlobalCanvas } from "@/components/brand/global-canvas";
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
@@ -45,7 +47,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
-      <body className="flex min-h-full flex-col antialiased">{children}</body>
+      <body className="flex min-h-full flex-col antialiased">
+        {children}
+        <GlobalCanvas />
+      </body>
     </html>
   );
 }

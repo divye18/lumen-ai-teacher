@@ -5,6 +5,7 @@ import {
   Component,
   useCallback,
   useSyncExternalStore,
+  useRef,
   type ReactNode,
 } from "react";
 import { useReducedMotion } from "framer-motion";
@@ -78,8 +79,11 @@ export function LumenCore({
     () => false,
   );
 
+  const containerRef = useRef<HTMLDivElement>(null);
+
   return (
     <div
+      ref={containerRef}
       className={cn("relative shrink-0", SIZE_STYLES[size], className)}
       aria-hidden="true"
     >
@@ -89,6 +93,7 @@ export function LumenCore({
             intensity={intensity}
             interactive={interactive}
             reduceMotion={!!reduce}
+            trackRef={containerRef}
           />
         </CoreErrorBoundary>
       ) : (

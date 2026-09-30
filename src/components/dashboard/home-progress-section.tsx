@@ -1,8 +1,5 @@
 "use client";
 
-import { motion, useReducedMotion } from "framer-motion";
-
-import { panelEntrance } from "@/lib/ui/motion";
 import type {
   ChapterProgress,
   NextTopic,
@@ -21,18 +18,12 @@ export function HomeProgressSection({
   nextTopic: NextTopic | null;
   masterySummary: MasterySummary | null;
 }) {
-  const reduce = useReducedMotion();
   if (!chapterProgress && !masterySummary) return null;
 
   return (
     <div className="flex flex-col gap-10 border-t border-[var(--color-border)] pt-8 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-8 lg:pl-12">
       {chapterProgress ? (
-        <motion.div
-          initial={reduce ? false : panelEntrance.initial}
-          animate={panelEntrance.animate}
-          transition={panelEntrance.transition}
-          className="flex flex-col gap-4"
-        >
+        <div className="flex flex-col gap-4">
           <p className="text-[length:var(--text-label)] font-semibold tracking-wide text-[var(--color-ink-muted)] uppercase">
             Curriculum Progress
           </p>
@@ -54,26 +45,20 @@ export function HomeProgressSection({
               </span>
             </div>
             <div className="h-[2px] w-full bg-[var(--color-border)]">
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{
+              <div
+                style={{
                   width: `${chapterProgress.totalTopics > 0 ? (chapterProgress.completedTopics / chapterProgress.totalTopics) * 100 : 0}%`,
                 }}
-                transition={{ duration: 0.8, ease: "easeOut" }}
+
                 className="h-full bg-[var(--color-learning)]"
               />
             </div>
           </div>
-        </motion.div>
+        </div>
       ) : null}
 
       {masterySummary ? (
-        <motion.div
-          initial={reduce ? false : panelEntrance.initial}
-          animate={panelEntrance.animate}
-          transition={panelEntrance.transition}
-          className="flex flex-col gap-4"
-        >
+        <div className="flex flex-col gap-4">
           <p className="text-[length:var(--text-label)] font-semibold tracking-wide text-[var(--color-ink-muted)] uppercase">
             Concept Mastery
           </p>
@@ -85,10 +70,9 @@ export function HomeProgressSection({
               </span>
             </div>
             <div className="h-[2px] w-full bg-[var(--color-border)]">
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: `${masterySummary.averagePoints}%` }}
-                transition={{ duration: 0.8, ease: "easeOut" }}
+              <div
+                style={{ width: `${masterySummary.averagePoints}%` }}
+
                 className="h-full bg-[var(--color-achievement)]"
               />
             </div>
@@ -97,7 +81,7 @@ export function HomeProgressSection({
               {masterySummary.conceptCount === 1 ? "" : "s"}
             </p>
           </div>
-        </motion.div>
+        </div>
       ) : null}
     </div>
   );

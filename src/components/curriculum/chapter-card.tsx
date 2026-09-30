@@ -1,11 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { motion, useReducedMotion } from "framer-motion";
 
 import { Badge } from "@/components/ui/badge";
 import { LinkButton } from "@/components/ui/button";
-import { staggerItem } from "@/lib/ui/motion";
 
 export interface ChapterCardData {
   id: string;
@@ -30,7 +28,6 @@ export function ChapterCard({
   chapter: ChapterCardData;
   index?: number;
 }) {
-  const reduce = useReducedMotion();
   const isComplete = isChapterComplete(
     chapter.totalTopics,
     chapter.nextTopicTitle,
@@ -39,10 +36,7 @@ export function ChapterCard({
   const num = (index + 1).toString().padStart(2, "0");
 
   return (
-    <motion.div
-      variants={staggerItem.variants}
-      className="group relative flex flex-col gap-4 border-b border-[var(--color-border)] px-4 py-8 transition-colors hover:bg-[var(--color-subtle)] sm:flex-row sm:items-center sm:gap-8 sm:px-6"
-    >
+    <div className="group relative flex flex-col gap-4 border-b border-[var(--color-border)] px-4 py-8 transition-colors hover:bg-[var(--color-subtle)] sm:flex-row sm:items-center sm:gap-8 sm:px-6">
       <div className="pt-1 text-[length:var(--text-meta)] font-semibold text-[var(--color-ink-faint)] sm:w-8 sm:pt-0">
         {num}.
       </div>
@@ -87,6 +81,6 @@ export function ChapterCard({
           </LinkButton>
         ) : null}
       </div>
-    </motion.div>
+    </div>
   );
 }

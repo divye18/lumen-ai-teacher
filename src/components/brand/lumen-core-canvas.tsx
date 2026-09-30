@@ -1,7 +1,8 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { useFrame } from "@react-three/fiber";
+import { View, PerspectiveCamera } from "@react-three/drei";
 import * as THREE from "three";
 import type { LumenCoreIntensity } from "./lumen-core";
 
@@ -103,17 +104,16 @@ export default function LumenCoreCanvas({
   intensity,
   interactive,
   reduceMotion,
+  trackRef,
 }: {
   intensity: LumenCoreIntensity;
   interactive: boolean;
   reduceMotion: boolean;
+  trackRef: React.RefObject<HTMLDivElement>;
 }) {
   return (
-    <Canvas
-      camera={{ position: [0, 0, 8], fov: 45 }}
-      dpr={[1, 2]}
-      gl={{ antialias: true, alpha: true }}
-    >
+    <View track={trackRef}>
+      <PerspectiveCamera makeDefault position={[0, 0, 8]} fov={45} />
       {/* Restrained controlled lighting */}
       <ambientLight intensity={0.4} color="#fff1e6" />
       <directionalLight position={[5, 5, 4]} intensity={1.5} color="#ffffff" />
@@ -134,6 +134,6 @@ export default function LumenCoreCanvas({
         interactive={interactive}
         reduceMotion={reduceMotion}
       />
-    </Canvas>
+    </View>
   );
 }

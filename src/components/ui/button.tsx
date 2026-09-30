@@ -21,9 +21,9 @@ const VARIANTS: Record<Variant, string> = {
 };
 
 const SIZES: Record<Size, string> = {
-  sm: "min-h-[44px] sm:min-h-0 h-11 sm:h-9 px-3 text-[13px] gap-1.5 rounded-[var(--radius-sm)]",
-  md: "min-h-[44px] h-11 px-4 text-[14px] gap-2 rounded-[var(--radius-sm)]",
-  lg: "min-h-[48px] h-12 px-6 text-[15px] gap-2 rounded-[var(--radius-md)]",
+  sm: "min-h-[44px] sm:min-h-0 h-11 sm:h-9 px-3 text-[13px] gap-1.5 rounded-[var(--radius-xs)]",
+  md: "min-h-[44px] h-11 px-4 text-[14px] gap-2 rounded-[var(--radius-xs)]",
+  lg: "min-h-[48px] h-12 px-6 text-[15px] gap-2 rounded-[var(--radius-xs)]",
 };
 
 const base = cn(

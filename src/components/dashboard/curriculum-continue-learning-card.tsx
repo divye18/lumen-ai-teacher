@@ -1,7 +1,5 @@
 "use client";
 
-import { motion, useReducedMotion } from "framer-motion";
-
 import { LinkButton } from "@/components/ui/button";
 import { emptyStateEntrance, sectionEntrance } from "@/lib/ui/motion";
 import type { CurriculumContinueLearningView } from "@/lib/studio/curriculum-home";
@@ -13,16 +11,9 @@ export function CurriculumContinueLearningCard({
   continueLearning: CurriculumContinueLearningView | null;
   chapterProgress: ChapterProgress | null;
 }) {
-  const reduce = useReducedMotion();
-
   if (!continueLearning) {
     return (
-      <motion.div
-        initial={reduce ? false : emptyStateEntrance.initial}
-        animate={emptyStateEntrance.animate}
-        transition={emptyStateEntrance.transition}
-        className="flex w-full flex-col gap-3 border-l-2 border-[var(--color-border-strong)] pl-5"
-      >
+      <div className="flex w-full flex-col gap-3 border-l-2 border-[var(--color-border-strong)] pl-5">
         <p className="text-[length:var(--text-label)] font-semibold tracking-wide text-[var(--color-ink-muted)] uppercase">
           Next Topic
         </p>
@@ -32,17 +23,12 @@ export function CurriculumContinueLearningCard({
         <p className="text-[length:var(--text-body)] text-[var(--color-ink-muted)]">
           Browse the curriculum to pick a topic and start learning.
         </p>
-      </motion.div>
+      </div>
     );
   }
 
   return (
-    <motion.div
-      initial={reduce ? false : sectionEntrance.initial}
-      animate={sectionEntrance.animate}
-      transition={sectionEntrance.transition}
-      className="flex w-full flex-col gap-5 border-l-2 border-[var(--color-border-strong)] pl-5"
-    >
+    <div className="flex w-full flex-col gap-5 border-l-2 border-[var(--color-border-strong)] pl-5">
       <div>
         <p className="text-[length:var(--text-label)] font-semibold tracking-wide text-[var(--color-ink-muted)] uppercase">
           Next Topic
@@ -60,6 +46,6 @@ export function CurriculumContinueLearningCard({
           Resume session
         </LinkButton>
       </div>
-    </motion.div>
+    </div>
   );
 }

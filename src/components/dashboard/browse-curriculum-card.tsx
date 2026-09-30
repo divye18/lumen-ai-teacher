@@ -1,18 +1,10 @@
 "use client";
 
-import { motion, useReducedMotion } from "framer-motion";
-
-import { panelEntrance } from "@/lib/ui/motion";
 import Link from "next/link";
 
 export function BrowseCurriculumCard() {
-  const reduce = useReducedMotion();
   return (
-    <motion.div
-      initial={reduce ? false : panelEntrance.initial}
-      animate={panelEntrance.animate}
-      transition={panelEntrance.transition}
-    >
+    <div>
       <div className="group relative mt-2 flex w-full flex-col border-t border-[var(--color-border)] pt-6">
         <div className="flex items-baseline gap-4">
           <span className="text-[length:var(--text-meta)] font-medium text-[var(--color-ink-faint)]">
@@ -36,6 +28,6 @@ export function BrowseCurriculumCard() {
           <span className="sr-only">Browse curriculum</span>
         </Link>
       </div>
-    </motion.div>
+    </div>
   );
 }

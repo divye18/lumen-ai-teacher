@@ -113,12 +113,7 @@ export function CurriculumTopicList({
   }
 
   return (
-    <motion.div
-      initial="hidden"
-      animate="visible"
-      variants={staggerContainer.variants}
-      className="mt-4 flex w-full flex-col border-t border-[var(--color-border)]"
-    >
+    <div className="mt-4 flex w-full flex-col border-t border-[var(--color-border)]">
       {topics.map((topic, index) => {
         const starting = startingId === topic.id;
         const error = errorById[topic.id];
@@ -129,9 +124,9 @@ export function CurriculumTopicList({
         const num = (index + 1).toString().padStart(2, "0");
 
         return (
-          <motion.div
+          <div
             key={topic.id}
-            variants={staggerItem.variants}
+
             className={cn(
               "group relative flex flex-col gap-4 border-b border-[var(--color-border)] px-4 py-6 transition-colors hover:bg-[var(--color-subtle)] sm:flex-row sm:items-start sm:gap-8 sm:px-6",
               expanded && "bg-[var(--color-subtle)]",
@@ -188,7 +183,7 @@ export function CurriculumTopicList({
                     initial={reduce ? false : { opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: "auto" }}
                     exit={reduce ? undefined : { opacity: 0, height: 0 }}
-                    transition={sectionEntrance.transition}
+
                     className="overflow-hidden pt-6"
                   >
                     <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
@@ -234,9 +229,9 @@ export function CurriculumTopicList({
                 ) : null}
               </AnimatePresence>
             </div>
-          </motion.div>
+          </div>
         );
       })}
-    </motion.div>
+    </div>
   );
 }
