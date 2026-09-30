@@ -68,7 +68,7 @@ export default async function StudioPage() {
             {overview.activeSession ? "In Progress" : curriculumHome.continueLearning?.chapterTitle || "Select a subject to begin learning."}
           </p>
           
-          <div className="mt-12 flex gap-4">
+          <div className="mt-12 flex flex-wrap gap-4">
              {overview.activeSession || curriculumHome.continueLearning ? (
                <LinkButton href={`/learn/${overview.activeSession ? overview.activeSession.sessionId : curriculumHome.continueLearning?.sessionId}`} size="lg" variant="secondary" className="border-transparent bg-white text-[var(--color-canvas)] hover:bg-white/90 rounded-none px-12 py-6 text-[15px]">
                  Continue Learning
@@ -78,6 +78,9 @@ export default async function StudioPage() {
                  Browse Curriculum
                </LinkButton>
              )}
+             <LinkButton href="/studio/demo" size="lg" variant="ghost" className="rounded-none px-12 py-6 text-[15px] border border-[var(--color-border)] hover:bg-[var(--color-subtle)]">
+               Live Demo
+             </LinkButton>
           </div>
         </div>
       </section>
