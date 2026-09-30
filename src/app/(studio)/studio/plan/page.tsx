@@ -26,7 +26,7 @@ export default async function PlanPage({
     status: d.status,
   }));
 
-  return (
+  return (<div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
     <div className="mx-auto flex max-w-2xl flex-col gap-6">
       <header>
         <h1 className="text-xl font-semibold tracking-tight">Plan a lesson</h1>
@@ -42,5 +42,5 @@ export default async function PlanPage({
         initialDocumentId={params.documentId ?? null}
       />
     </div>
-  );
+  </div>);
 }

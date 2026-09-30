@@ -33,7 +33,7 @@ export default async function KnowledgePage() {
     };
   });
 
-  return (
+  return (<div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
     <div className="flex flex-col gap-6">
       <header>
         <h1 className="text-xl font-semibold tracking-tight">Knowledge</h1>
@@ -45,5 +45,5 @@ export default async function KnowledgePage() {
       <AddKnowledgePanel />
       <DocumentList documents={documents} />
     </div>
-  );
+  </div>);
 }

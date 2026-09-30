@@ -24,7 +24,7 @@ export default async function StudioLayout({
   return (
     <div className="flex min-h-svh flex-col">
       <StudioNav email={user.value.email} />
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-10">
+      <main className="flex-1 w-full flex flex-col relative">
         {children}
       </main>
     </div>

@@ -1,30 +1,24 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 
-import { BrowseCurriculumCard } from "@/components/dashboard/browse-curriculum-card";
-import { ContinueLearning } from "@/components/dashboard/continue-learning";
-import { CurriculumContinueLearningCard } from "@/components/dashboard/curriculum-continue-learning-card";
-import { DemoCard } from "@/components/dashboard/demo-card";
-import { EmptyStudio } from "@/components/dashboard/empty-studio";
-import {
-  HomeProgressSection,
-  type MasterySummary,
-} from "@/components/dashboard/home-progress-section";
-import { LearningLens } from "@/components/dashboard/learning-lens";
-import { LearnerMemory } from "@/components/dashboard/learner-memory";
-import { LearningMomentum } from "@/components/dashboard/learning-momentum";
-import { MisconceptionRadar } from "@/components/dashboard/misconception-radar";
-import { RecommendedAction } from "@/components/dashboard/recommended-action";
-import { KnowledgeGraphPanel } from "@/components/graph/knowledge-graph-panel";
 import { LumenCore } from "@/components/brand/lumen-core";
 import { getLLMProviderFromConfig } from "@/lib/ai/llm";
 import { requireUser } from "@/lib/auth/current-user";
 import { getSupabaseServerClient } from "@/lib/db/server";
 import { getStudioOverview } from "@/lib/studio/overview";
 import { getCurriculumHome } from "@/lib/studio/curriculum-home";
+import { LinkButton } from "@/components/ui/button";
 
 export const metadata: Metadata = { title: "Studio" };
 export const dynamic = "force-dynamic";
+
+function greeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 18) return "Good afternoon";
+  return "Good evening";
+}
 
 export default async function StudioPage() {
   const supabase = await getSupabaseServerClient();
@@ -40,99 +34,159 @@ export default async function StudioPage() {
   const firstName = overview.learnerName?.split(" ")[0];
 
   const assessedConcepts = overview.concepts.filter((c) => c.assessed);
-  const masterySummary: MasterySummary | null =
-    assessedConcepts.length > 0
-      ? {
-          averagePoints: Math.round(
-            assessedConcepts.reduce((sum, c) => sum + c.masteryPoints, 0) /
-              assessedConcepts.length,
-          ),
-          conceptCount: assessedConcepts.length,
-        }
-      : null;
+  const averagePoints = assessedConcepts.length > 0
+    ? Math.round(assessedConcepts.reduce((sum, c) => sum + c.masteryPoints, 0) / assessedConcepts.length)
+    : 0;
 
   return (
-    <div className="flex flex-col gap-12 pb-12 sm:gap-16">
-      <div className="grid grid-cols-1 gap-12 lg:grid-cols-12 lg:gap-16">
-        <div className="flex flex-col items-start pt-4 lg:col-span-7">
-          <header className="mb-10 w-full">
-            <p className="mb-3 text-[length:var(--text-label)] font-semibold tracking-[0.1em] text-[var(--color-ink-muted)] uppercase">
-              Learning Studio
-            </p>
-            <h1 className="text-[length:var(--text-hero)] leading-[1.05] font-medium tracking-tight text-balance text-[var(--color-ink)]">
-              {curriculumHome.continueLearning
-                ? "Continue your study of Physics."
-                : "Begin your curriculum exploration."}
-            </h1>
-            <p className="mt-4 text-[length:var(--text-title)] text-[var(--color-ink-muted)]">
-              {firstName ? `${greeting()}, ${firstName}.` : `${greeting()}.`}
-            </p>
-          </header>
-
-          <div className="flex w-full flex-col gap-8">
-            <CurriculumContinueLearningCard
-              continueLearning={curriculumHome.continueLearning}
-              chapterProgress={curriculumHome.chapterProgress}
-            />
-            <BrowseCurriculumCard />
-          </div>
-        </div>
-
-        <div className="flex flex-col pt-4 lg:col-span-5">
-          <div className="mb-12 flex justify-center lg:justify-end">
+    <div className="dark relative min-h-svh w-full flex flex-col bg-[var(--color-canvas)] text-[var(--color-ink)] selection:bg-[var(--color-ink-muted)] selection:text-[var(--color-canvas)]">
+      
+      {/* 01 - HERO SECTION */}
+      <section className="relative flex flex-col justify-center min-h-[70vh] px-6 sm:px-12 max-w-7xl mx-auto w-full pt-20">
+        
+        {/* Core in background */}
+        <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-[20%] opacity-60 pointer-events-none md:translate-x-[10%] lg:translate-x-0 hidden sm:block">
+          <div className="w-[60vw] max-w-[600px] aspect-square">
             <LumenCore size="hero" intensity="subtle" interactive />
           </div>
-          <HomeProgressSection
-            chapterProgress={curriculumHome.chapterProgress}
-            nextTopic={curriculumHome.nextTopic}
-            masterySummary={masterySummary}
-          />
         </div>
-      </div>
 
-      {overview.hasAnyData ? (
-        <div className="flex flex-col gap-8 border-t border-[var(--color-border)] pt-12">
-          <RecommendedAction recommendation={overview.recommendation} />
+        <div className="relative z-10 flex flex-col items-start max-w-3xl">
+          <p className="mb-8 font-mono text-[11px] font-semibold tracking-[0.1em] text-[var(--color-ink-muted)] uppercase">
+            {firstName ? `${greeting()}, ${firstName}.` : `${greeting()}.`}
+          </p>
+          
+          <h2 className="font-mono text-[11px] font-semibold tracking-[0.1em] text-[var(--color-learning)] uppercase mb-6">
+            Current Objective
+          </h2>
+          
+          <h1 className="font-editorial text-5xl leading-[1.05] font-medium tracking-tight text-[var(--color-ink)] sm:text-7xl">
+            {curriculumHome.continueLearning ? curriculumHome.continueLearning.topicTitle : "Begin your exploration."}
+          </h1>
 
-          {overview.activeSession ? (
-            <ContinueLearning session={overview.activeSession} />
-          ) : null}
-
-          <KnowledgeGraphPanel graph={overview.graph} />
-
-          <LearningLens observations={overview.observations} />
-
-          <LearnerMemory
-            memory={overview.learnerMemory}
-            intelligenceInsight={overview.intelligenceInsight}
-          />
-
-          <div className="grid gap-6 lg:grid-cols-2">
-            <MisconceptionRadar misconceptions={overview.misconceptions} />
-            <LearningMomentum momentum={overview.momentum} />
+          <p className="mt-6 font-mono text-[13px] text-[var(--color-ink-muted)] uppercase tracking-widest">
+            {curriculumHome.continueLearning?.chapterTitle || "Select a subject to begin learning."}
+          </p>
+          
+          <div className="mt-12 flex gap-4">
+             {curriculumHome.continueLearning ? (
+               <LinkButton href={`/learn/${curriculumHome.continueLearning.sessionId}`} size="lg" variant="secondary" className="border-transparent bg-white text-[var(--color-canvas)] hover:bg-white/90 rounded-none px-12 py-6 text-[15px]">
+                 Continue Learning
+               </LinkButton>
+             ) : (
+               <LinkButton href="/learn/c" size="lg" variant="secondary" className="border-transparent bg-white text-[var(--color-canvas)] hover:bg-white/90 rounded-none px-12 py-6 text-[15px]">
+                 Browse Curriculum
+               </LinkButton>
+             )}
           </div>
+        </div>
+      </section>
 
-          {!overview.llmConfigured ? (
-            <p className="text-center text-[12px] text-[var(--color-ink-faint)]">
-              Lumen is running in offline planning mode. Add an{" "}
-              <code className="font-mono">LLM_API_KEY</code> for AI-generated
-              lessons, questions and evaluation.
-            </p>
-          ) : null}
+      {/* 02 - LEARNER STATE */}
+      <section className="relative px-6 sm:px-12 max-w-7xl mx-auto w-full py-24 border-t border-[var(--color-border)]/20">
+        <div className="grid gap-16 md:grid-cols-2">
+           
+           {/* Progress Cluster */}
+           <div className="flex flex-col gap-12">
+              <h2 className="font-mono text-[11px] font-semibold tracking-[0.1em] text-[var(--color-ink-faint)] uppercase">
+                Curriculum Trajectory
+              </h2>
+              
+              {curriculumHome.chapterProgress ? (
+                <div className="flex flex-col gap-4">
+                  <div className="flex justify-between font-mono text-[11px] uppercase tracking-wide text-[var(--color-ink-muted)]">
+                    <span>{curriculumHome.chapterProgress.completedTopics} of {curriculumHome.chapterProgress.totalTopics} Topics</span>
+                    <span>
+                      {curriculumHome.chapterProgress.totalTopics > 0
+                        ? Math.round((curriculumHome.chapterProgress.completedTopics / curriculumHome.chapterProgress.totalTopics) * 100)
+                        : 0}%
+                    </span>
+                  </div>
+                  <div className="h-[2px] w-full bg-[var(--color-border)]/20 relative">
+                    <div
+                      style={{
+                        width: `${curriculumHome.chapterProgress.totalTopics > 0 ? (curriculumHome.chapterProgress.completedTopics / curriculumHome.chapterProgress.totalTopics) * 100 : 0}%`,
+                      }}
+                      className="absolute inset-y-0 left-0 bg-[var(--color-learning)]"
+                    />
+                  </div>
+                </div>
+              ) : (
+                 <p className="font-editorial text-2xl text-[var(--color-ink-muted)]">
+                   No progress recorded yet.
+                 </p>
+              )}
+
+              {assessedConcepts.length > 0 && (
+                <div className="flex flex-col gap-4 pt-8">
+                  <div className="flex justify-between font-mono text-[11px] uppercase tracking-wide text-[var(--color-ink-muted)]">
+                    <span>Average Concept Mastery</span>
+                    <span className="text-[var(--color-achievement)]">{averagePoints} pts</span>
+                  </div>
+                  <div className="h-[2px] w-full bg-[var(--color-border)]/20 relative">
+                    <div
+                      style={{ width: `${averagePoints}%` }}
+                      className="absolute inset-y-0 left-0 bg-[var(--color-achievement)]"
+                    />
+                  </div>
+                </div>
+              )}
+           </div>
+
+           {/* Learner Intelligence Cluster */}
+           <div className="flex flex-col gap-16">
+              
+              {/* Memory */}
+              {overview.learnerMemory && overview.learnerMemory.signals.length > 0 && (
+                <div className="flex flex-col gap-6">
+                   <h2 className="font-mono text-[11px] font-semibold tracking-[0.1em] text-[var(--color-ink-faint)] uppercase">
+                     Learner Memory
+                   </h2>
+                   <div className="flex flex-col gap-6">
+                     {overview.learnerMemory.signals.slice(0, 3).map(s => (
+                       <div key={s.text} className="flex flex-col">
+                         <p className="font-editorial text-xl text-[var(--color-ink)]">{s.text}</p>
+                         <span className="mt-2 font-mono text-[10px] text-[var(--color-ink-faint)] uppercase tracking-wider">{s.evidence}</span>
+                       </div>
+                     ))}
+                   </div>
+                </div>
+              )}
+
+              {/* Misconceptions */}
+              {overview.misconceptions && overview.misconceptions.length > 0 && (
+                <div className="flex flex-col gap-6 pt-8 border-t border-[var(--color-border)]/20">
+                   <h2 className="font-mono text-[11px] font-semibold tracking-[0.1em] text-[var(--color-danger)]/80 uppercase">
+                     Active Misconceptions
+                   </h2>
+                   <div className="flex flex-col gap-6">
+                     {overview.misconceptions.slice(0, 3).map(m => (
+                       <div key={m.id} className="flex flex-col">
+                         <p className="font-editorial text-xl text-[var(--color-ink)]">{m.whatLumenNoticed}</p>
+                         <span className="mt-2 font-mono text-[10px] text-[var(--color-danger)]/60 uppercase tracking-wider">Category: {m.category}</span>
+                       </div>
+                     ))}
+                   </div>
+                </div>
+              )}
+
+           </div>
+
         </div>
-      ) : (
-        <div className="flex flex-col gap-8 border-t border-[var(--color-border)] pt-12">
-          <DemoCard />
-          <EmptyStudio name={overview.learnerName} />
-        </div>
-      )}
+      </section>
+
+      {/* 03 - CURRICULUM ACCESS */}
+      <section className="relative px-6 sm:px-12 max-w-7xl mx-auto w-full py-24 border-t border-[var(--color-border)]/20">
+         <div className="flex flex-col items-center justify-center text-center">
+            <h2 className="font-editorial text-4xl text-[var(--color-ink)] sm:text-5xl mb-8">
+              Explore Curriculum
+            </h2>
+            <LinkButton href="/learn/c" size="lg" variant="secondary" className="border-transparent bg-white/5 text-white hover:bg-white/10 rounded-none px-12 py-4">
+              Enter Knowledge Map
+            </LinkButton>
+         </div>
+      </section>
+
     </div>
   );
-}
-
-function greeting(): string {
-  const h = new Date().getHours();
-  if (h < 12) return "Good morning";
-  if (h < 18) return "Good afternoon";
-  return "Good evening";
 }
