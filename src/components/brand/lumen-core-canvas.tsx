@@ -109,7 +109,7 @@ export default function LumenCoreCanvas({
   intensity: LumenCoreIntensity;
   interactive: boolean;
   reduceMotion: boolean;
-  trackRef: React.RefObject<HTMLDivElement>;
+  trackRef: any // eslint-disable-line @typescript-eslint/no-explicit-any
 }) {
   return (
     <View track={trackRef}>

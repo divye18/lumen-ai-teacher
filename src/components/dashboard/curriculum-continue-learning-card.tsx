@@ -1,7 +1,7 @@
 "use client";
 
 import { LinkButton } from "@/components/ui/button";
-import { emptyStateEntrance, sectionEntrance } from "@/lib/ui/motion";
+
 import type { CurriculumContinueLearningView } from "@/lib/studio/curriculum-home";
 import type { ChapterProgress } from "@/lib/curriculum/chapter-progress";
 

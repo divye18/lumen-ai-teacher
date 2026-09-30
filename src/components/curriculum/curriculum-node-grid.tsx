@@ -3,7 +3,7 @@
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
-import { staggerContainer, staggerItem } from "@/lib/ui/motion";
+
 
 export interface CurriculumNodeCardData {
   id: string;
