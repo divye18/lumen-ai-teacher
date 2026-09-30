@@ -61,10 +61,10 @@ export function SessionTimelinePanel({ events }: { events: SessionEvent[] }) {
                     <span className="my-0.5 w-px flex-1 bg-[var(--color-border)]" />
                   ) : null}
                 </div>
-                <div className="pb-2.5">
+                <div className="min-w-0 flex-1 pb-2.5">
                   <p
                     className={cn(
-                      "text-[12px] leading-tight",
+                      "text-[12px] leading-tight break-words",
                       i === events.length - 1
                         ? "font-medium text-[var(--color-ink)]"
                         : "text-[var(--color-ink-muted)]",

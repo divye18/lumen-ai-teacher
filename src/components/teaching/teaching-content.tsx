@@ -56,7 +56,7 @@ export function TeachingContent({
 
       <div
         className={cn(
-          "mt-4 space-y-4 text-[15px] leading-relaxed text-[var(--color-ink)]",
+          "mt-4 space-y-4 text-[15px] leading-relaxed break-words text-[var(--color-ink)]",
           !reduce && !reveal.done && "cursor-pointer",
         )}
         onClick={() => {

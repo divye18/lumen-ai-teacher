@@ -48,7 +48,7 @@ export function VoiceControls({
             listening ? "Stop recording" : "Start recording your answer"
           }
           className={cn(
-            "grid size-11 shrink-0 place-items-center rounded-full border transition-colors",
+            "grid size-11 shrink-0 place-items-center rounded-full border transition-all active:scale-[0.98]",
             listening
               ? "border-[var(--color-signal-advancing)] bg-[color-mix(in_oklab,var(--color-signal-advancing)_15%,transparent)] text-[var(--color-signal-advancing)]"
               : "border-[var(--color-border-strong)] text-[var(--color-ink-muted)] hover:text-[var(--color-ink)] disabled:opacity-40",

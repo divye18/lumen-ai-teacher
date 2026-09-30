@@ -69,11 +69,11 @@ export function ConceptInspector({
           <p className="text-[10px] font-semibold tracking-wider text-[var(--color-ink-faint)] uppercase">
             Concept
           </p>
-          <h3 className="mt-1 text-[15px] font-semibold tracking-tight">
+          <h3 className="mt-1 text-[15px] font-semibold tracking-tight break-words">
             {node.title}
           </h3>
           {node.description ? (
-            <p className="mt-1 text-[12px] leading-relaxed text-[var(--color-ink-muted)]">
+            <p className="mt-1 text-[12px] leading-relaxed break-words text-[var(--color-ink-muted)]">
               {node.description}
             </p>
           ) : null}

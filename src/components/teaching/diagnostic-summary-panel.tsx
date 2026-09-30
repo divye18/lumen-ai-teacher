@@ -55,15 +55,17 @@ export function DiagnosticSummaryPanel({
 
   return (
     <Panel inset>
-      <div className="flex items-center gap-3 text-[var(--color-accent)]">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-4">
         <LumenCore size="small" intensity="focus" interactive={false} />
-        <span className="text-[11px] font-semibold tracking-wide uppercase">
-          Diagnostic summary
-        </span>
+        <div>
+          <span className="text-[11px] font-semibold tracking-wide text-[var(--color-accent)] uppercase">
+            Diagnostic summary
+          </span>
+          <h1 className="mt-1 text-xl font-semibold text-[var(--color-ink)]">
+            Here&apos;s what I learned about you
+          </h1>
+        </div>
       </div>
-      <h1 className="mt-3 text-xl font-semibold text-[var(--color-ink)]">
-        Here&apos;s what I learned about you
-      </h1>
 
       {hasAnyConcepts ? (
         <div className="mt-5">

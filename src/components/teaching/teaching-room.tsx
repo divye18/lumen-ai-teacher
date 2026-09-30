@@ -662,6 +662,7 @@ export function TeachingRoom({
                     citations={step.citations}
                     onSubmit={submitAnswer}
                     submitting={busy}
+                    errorMsg={errorMsg}
                     voiceTranscript={voiceEnabled ? voiceAnswer : null}
                     voiceSlot={
                       voiceEnabled && voice.capabilities.recognition ? (
@@ -688,14 +689,6 @@ export function TeachingRoom({
                       ) : null
                     }
                   />
-                  {errorMsg ? (
-                    <p
-                      role="alert"
-                      className="mt-3 text-[12px] text-[var(--color-danger)]"
-                    >
-                      {errorMsg}
-                    </p>
-                  ) : null}
                 </>
               ) : null}
 

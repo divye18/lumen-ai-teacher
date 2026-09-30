@@ -17,6 +17,7 @@ export function QuestionPanel({
   citations,
   onSubmit,
   submitting,
+  errorMsg,
   voiceTranscript,
   voiceSlot,
 }: {
@@ -24,6 +25,7 @@ export function QuestionPanel({
   citations: TeachingCitation[];
   onSubmit: (answer: string, elapsedMs: number) => void;
   submitting: boolean;
+  errorMsg?: string | null;
   /** A completed spoken answer — drops into the field for review, never auto-sent. */
   voiceTranscript?: string | null;
   /** Voice controls rendered above the textarea, when voice is on. */
@@ -44,6 +46,15 @@ export function QuestionPanel({
             onSubmit(JSON.stringify(structuredAnswer), elapsedMs)
           }
         />
+        {errorMsg ? (
+          <p
+            id="question-error"
+            role="alert"
+            className="mt-3 text-[12px] text-[var(--color-danger)]"
+          >
+            {errorMsg}
+          </p>
+        ) : null}
       </div>
     );
   }
@@ -54,6 +65,7 @@ export function QuestionPanel({
       citations={citations}
       onSubmit={onSubmit}
       submitting={submitting}
+      errorMsg={errorMsg}
       voiceTranscript={voiceTranscript}
       voiceSlot={voiceSlot}
     />
@@ -65,6 +77,7 @@ function FreeFormQuestion({
   citations,
   onSubmit,
   submitting,
+  errorMsg,
   voiceTranscript,
   voiceSlot,
 }: {
@@ -72,6 +85,7 @@ function FreeFormQuestion({
   citations: TeachingCitation[];
   onSubmit: (answer: string, elapsedMs: number) => void;
   submitting: boolean;
+  errorMsg?: string | null;
   voiceTranscript?: string | null;
   voiceSlot?: React.ReactNode;
 }) {
@@ -145,6 +159,8 @@ function FreeFormQuestion({
           </p>
         ) : null}
         <textarea
+          aria-invalid={!!errorMsg}
+          aria-describedby={errorMsg ? "freeform-error" : undefined}
           id="answer"
           value={answer}
           onChange={(e) => setAnswer(e.target.value)}
@@ -157,8 +173,17 @@ function FreeFormQuestion({
               onSubmit(answer.trim(), elapsed());
             }
           }}
-          className="w-full resize-y rounded-[var(--radius-md)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-4 text-[15px] leading-relaxed text-[var(--color-ink)] placeholder:text-[var(--color-ink-faint)] focus-visible:border-[var(--color-accent)] focus-visible:ring-2 focus-visible:ring-[color-mix(in_oklab,var(--color-accent)_30%,transparent)] focus-visible:outline-none disabled:opacity-60"
+          className="w-full resize-y rounded-[var(--radius-md)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-4 text-[15px] leading-relaxed text-[var(--color-ink)] placeholder:text-[var(--color-ink-faint)] focus-visible:border-[var(--color-accent)] focus-visible:ring-2 focus-visible:ring-[color-mix(in_oklab,var(--color-accent)_30%,transparent)] focus-visible:outline-none disabled:opacity-60 aria-invalid:border-[var(--color-danger)] aria-invalid:focus-visible:ring-[color-mix(in_oklab,var(--color-danger)_30%,transparent)]"
         />
+        {errorMsg ? (
+          <p
+            id="freeform-error"
+            role="alert"
+            className="mt-2 text-[12px] text-[var(--color-danger)]"
+          >
+            {errorMsg}
+          </p>
+        ) : null}
         <div className="mt-3 flex items-center justify-between">
           <span className="text-[11px] text-[var(--color-ink-faint)]">
             {answer.trim().length} characters · ⌘↵ to submit

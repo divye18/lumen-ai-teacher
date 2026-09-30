@@ -62,8 +62,11 @@ export function SessionCompleteView({ report }: { report: SessionReport }) {
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6">
-      <div className="flex justify-center pt-8 pb-2">
+      <div className="hidden justify-center pt-8 pb-2 sm:flex">
         <LumenCore size="medium" intensity="focus" interactive={false} />
+      </div>
+      <div className="flex justify-center pt-4 pb-0 sm:hidden">
+        <LumenCore size="small" intensity="focus" interactive={false} />
       </div>
       <motion.header
         initial={reduce ? false : { opacity: 0, y: 10 }}

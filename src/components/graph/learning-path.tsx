@@ -96,7 +96,7 @@ export function LearningPath({
           );
         })}
       </ol>
-      <p className="mt-3 text-[12px] leading-relaxed text-[var(--color-ink-muted)]">
+      <p className="mt-3 text-[12px] leading-relaxed break-words text-[var(--color-ink-muted)]">
         {explanation}
       </p>
     </div>

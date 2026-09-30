@@ -72,12 +72,13 @@ function CoreGeometry({
         <icosahedronGeometry args={[2.5, 0]} />
         <meshPhysicalMaterial
           color={EMERALD_TINT}
-          metalness={0.1}
-          roughness={0.3}
+          metalness={0.15}
+          roughness={0.2}
           transmission={0.9} // Glass-like
           thickness={1.5}
           ior={1.4}
-          clearcoat={0.1}
+          clearcoat={0.8}
+          clearcoatRoughness={0.1}
           transparent
           opacity={1}
         />
@@ -110,7 +111,7 @@ export default function LumenCoreCanvas({
   return (
     <Canvas
       camera={{ position: [0, 0, 8], fov: 45 }}
-      dpr={[1, 1.5]}
+      dpr={[1, 2]}
       gl={{ antialias: true, alpha: true }}
     >
       {/* Restrained controlled lighting */}
