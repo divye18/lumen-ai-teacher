@@ -16,6 +16,7 @@ import { LearningMomentum } from "@/components/dashboard/learning-momentum";
 import { MisconceptionRadar } from "@/components/dashboard/misconception-radar";
 import { RecommendedAction } from "@/components/dashboard/recommended-action";
 import { KnowledgeGraphPanel } from "@/components/graph/knowledge-graph-panel";
+import { LumenCore } from "@/components/brand/lumen-core";
 import { getLLMProviderFromConfig } from "@/lib/ai/llm";
 import { requireUser } from "@/lib/auth/current-user";
 import { getSupabaseServerClient } from "@/lib/db/server";
@@ -78,6 +79,9 @@ export default async function StudioPage() {
         </div>
 
         <div className="flex flex-col pt-4 lg:col-span-5">
+          <div className="mb-12 flex justify-center lg:justify-end">
+            <LumenCore size="hero" intensity="subtle" interactive />
+          </div>
           <HomeProgressSection
             chapterProgress={curriculumHome.chapterProgress}
             nextTopic={curriculumHome.nextTopic}
