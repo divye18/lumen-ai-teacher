@@ -2,33 +2,19 @@ import type { HTMLAttributes } from "react";
 
 import { cn } from "@/lib/ui/cn";
 
-type PanelVariant = "default" | "quiet" | "elevated" | "hero" | "progress";
+type PanelVariant =
+  "default" | "quiet" | "elevated" | "hero" | "progress" | "unboxed";
 
-/**
- * Milestone 20 — five genuinely different surface treatments, not one
- * `Panel` recolored five ways. Each variant changes border/shadow/background
- * weight so surfaces read by IMPORTANCE, not just by content:
- *
- *  - `default`  — the everyday container (was the only treatment before).
- *  - `quiet`    — near-invisible grouping; no shadow, a faint tint instead
- *                 of a hard border. For secondary/metadata clusters.
- *  - `elevated` — a genuinely raised interactive surface (hover targets,
- *                 selectable cards) — stronger shadow + border on hover.
- *  - `hero`     — the ONE dominant surface per screen (Continue Learning).
- *                 Deeper shadow, restrained background geometry, no
- *                 glassmorphism (no blur/opacity tricks on content).
- *  - `progress` — a flatter, tinted-learning-accent surface for progress
- *                 visualizations, distinct from ordinary content panels.
- */
 const PANEL_VARIANTS: Record<PanelVariant, string> = {
   default:
-    "border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-xs)]",
+    "border border-[var(--color-border)] bg-[var(--color-surface)] shadow-none",
   quiet: "border border-transparent bg-[var(--color-subtle)] shadow-none",
   elevated:
     "border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-sm)] transition-[border-color,box-shadow] duration-200",
-  hero: "lumen-hero-field border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-hero)]",
+  hero: "border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-md)]",
   progress:
-    "border border-[var(--color-border)] bg-[var(--color-learning-soft)] shadow-none",
+    "border-t-2 border-[var(--color-learning)] bg-transparent shadow-none",
+  unboxed: "border-none bg-transparent shadow-none",
 };
 
 /** A restrained container. Used sparingly — not everything is a card. */
@@ -44,9 +30,11 @@ export function Panel({
   return (
     <div
       className={cn(
-        "rounded-[var(--radius-lg)]",
+        variant !== "unboxed" && variant !== "progress"
+          ? "rounded-[var(--radius-md)]"
+          : "",
         PANEL_VARIANTS[variant],
-        inset ? "p-5 sm:p-6" : "",
+        inset && variant !== "unboxed" ? "p-5 sm:p-6" : "",
         className,
       )}
       {...props}
@@ -63,8 +51,6 @@ export function SectionHeading({
 }: {
   title: string;
   hint?: string;
-  /** Small uppercase label above the title — an editorial "kicker", used
-   * sparingly (Studio's top-level sections), not on every heading. */
   eyebrow?: string;
   action?: React.ReactNode;
   className?: string;
@@ -77,11 +63,11 @@ export function SectionHeading({
             {eyebrow}
           </p>
         ) : null}
-        <h2 className="text-[length:var(--text-title)] font-semibold tracking-tight text-[var(--color-ink)]">
+        <h2 className="text-[length:var(--text-title)] font-medium tracking-tight text-[var(--color-ink)]">
           {title}
         </h2>
         {hint ? (
-          <p className="mt-0.5 text-[length:var(--text-body)] text-[var(--color-ink-muted)]">
+          <p className="mt-1 text-[length:var(--text-body)] text-[var(--color-ink-muted)]">
             {hint}
           </p>
         ) : null}

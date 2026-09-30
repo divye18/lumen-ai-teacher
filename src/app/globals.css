@@ -2,62 +2,46 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* ─────────────────────────────────────────────────────────────
-   Lumen design tokens.
-   Neutral-forward, one restrained accent, hairline borders.
-   Light + dark via a `.dark` class on <html> (see ThemeScript).
-   ───────────────────────────────────────────────────────────── */
-
 @theme {
   --font-sans:
     var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", monospace;
+  --font-editorial:
+    var(--font-lora), var(--font-geist-sans), ui-serif, Georgia, serif;
 
-  --radius-xs: 0.375rem;
-  --radius-sm: 0.5rem;
-  --radius-md: 0.75rem;
-  --radius-lg: 1rem;
-  --radius-xl: 1.5rem;
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
 
-  --color-canvas: #fbfbfa;
-  --color-surface: #ffffff;
+  --color-canvas: #f4f0e6;
+  --color-surface: #fafaf8;
   --color-surface-raised: #ffffff;
-  /* Milestone 19.1: a further elevation step above `surface` (menus, popovers,
-     selected/active cards) — aliases `surface-raised` rather than introducing
-     a third near-identical hex, since nothing referenced that token before. */
   --color-surface-elevated: var(--color-surface-raised);
-  --color-subtle: #f3f3f1;
-  --color-ink: #191917;
-  --color-ink-muted: #6b6a67;
-  --color-ink-faint: #9c9a96;
-  --color-border: #e7e6e3;
-  --color-border-strong: #d6d5d1;
+  --color-subtle: #eae6db;
+  --color-ink: #0b0d0f;
+  --color-ink-muted: #4a5056;
+  --color-ink-faint: #8a9198;
+  --color-border: #d8d4c8;
+  --color-border-strong: #c0bcae;
 
-  --color-accent: #5b4be6;
-  --color-accent-soft: #ece9fe;
-  --color-accent-contrast: #ffffff;
-  /* `primary` names the same identity color for call sites that want the
-     semantic role rather than the "accent" name specifically. */
+  --color-accent: #111827;
+  --color-accent-soft: #e2e4e9;
+  --color-accent-contrast: #f4f0e6;
   --color-primary: var(--color-accent);
   --color-success: var(--color-positive);
 
-  /* Milestone 19.1 — mode-identity accents. Semantic accents layered on top
-     of the neutral+violet foundation, not a second palette: every other
-     token (surfaces, ink, borders) stays exactly as before. `learning`
-     covers VISUALIZE/3D/VOICE ("explain-adjacent" modes); `practice` covers
-     structured-question/practice surfaces. Deliberately reuses the existing
-     cyan/orange hue families already established by the band/signal tokens
-     below, rather than introducing unrelated new hues. */
-  --color-learning: #0e7490;
+  --color-learning: #164e45;
   --color-learning-soft: color-mix(
     in oklab,
-    var(--color-learning) 12%,
+    var(--color-learning) 10%,
     var(--color-surface)
   );
-  --color-practice: #c2401f;
+  --color-practice: #9b492b;
   --color-practice-soft: color-mix(
     in oklab,
-    var(--color-practice) 12%,
+    var(--color-practice) 10%,
     var(--color-surface)
   );
 
@@ -68,41 +52,30 @@
   --color-band-strong: #16a34a;
 
   --color-signal-advancing: #16a34a;
-  --color-signal-reinforcing: #5b4be6;
-  --color-signal-revisiting: #0891b2;
-  --color-signal-remediating: #c2620d;
-  --color-signal-challenging: #9333ea;
+  --color-signal-reinforcing: #111827;
+  --color-signal-revisiting: #164e45;
+  --color-signal-remediating: #9b492b;
+  --color-signal-challenging: #6b7280;
 
-  --color-positive: #16a34a;
-  --color-warning: #c2620d;
-  --color-danger: #dc2626;
+  --color-positive: #164e45;
+  --color-warning: #9b492b;
+  --color-danger: #8b0000;
 
-  /* Milestone 20 — achievement/completion semantic, restrained amber/gold.
-     Reserved for milestones/completion moments only — never a general
-     "highlight" color, per the visual-identity brief. */
-  --color-achievement: #a1690a;
+  --color-achievement: #a88b52;
   --color-achievement-soft: color-mix(
     in oklab,
-    var(--color-achievement) 12%,
+    var(--color-achievement) 10%,
     var(--color-surface)
   );
 
-  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.04);
-  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04);
+  --shadow-xs: 0 1px 2px 0 rgb(11 13 15 / 0.05);
+  --shadow-sm:
+    0 1px 3px 0 rgb(11 13 15 / 0.08), 0 1px 2px -1px rgb(11 13 15 / 0.04);
   --shadow-md:
-    0 4px 12px -2px rgb(0 0 0 / 0.08), 0 2px 6px -2px rgb(0 0 0 / 0.05);
-  --shadow-lg: 0 16px 48px -12px rgb(0 0 0 / 0.14);
-  /* Milestone 20 — a deeper elevation for the ONE hero surface per screen
-     (e.g. Continue Learning). Deliberately used sparingly, not a general
-     "bigger shadow" option. */
-  --shadow-hero: 0 24px 64px -16px rgb(0 0 0 / 0.18);
+    0 4px 12px -2px rgb(11 13 15 / 0.1), 0 2px 6px -2px rgb(11 13 15 / 0.06);
+  --shadow-lg: 0 16px 48px -12px rgb(11 13 15 / 0.16);
+  --shadow-hero: 0 24px 64px -16px rgb(11 13 15 / 0.2);
 
-  /* Milestone 20 — typography scale, now actually applied (19.1 declared
-     these but nothing consumed them). `--text-hero` added above `display`
-     for the one true page-hero headline (e.g. Continue Learning's topic
-     title); `display` remains for ordinary page titles. Font family/weight
-     stack is unchanged — hierarchy comes from size + weight + color, not a
-     second typeface. */
   --text-hero: 2.5rem;
   --text-display: 1.75rem;
   --text-title: 1.25rem;
@@ -113,33 +86,33 @@
 }
 
 .dark {
-  --color-canvas: #0a0a0b;
-  --color-surface: #131315;
-  --color-surface-raised: #1a1a1d;
+  --color-canvas: #0b0d0f;
+  --color-surface: #111827;
+  --color-surface-raised: #1f2937;
   --color-surface-elevated: var(--color-surface-raised);
-  --color-subtle: #1c1c1f;
-  --color-ink: #ededec;
-  --color-ink-muted: #9b9a97;
-  --color-ink-faint: #6a6967;
-  --color-border: #262528;
-  --color-border-strong: #363539;
+  --color-subtle: #18212f;
+  --color-ink: #f4f0e6;
+  --color-ink-muted: #9ca3af;
+  --color-ink-faint: #6b7280;
+  --color-border: #374151;
+  --color-border-strong: #4b5563;
 
-  --color-accent: #8b7dff;
-  --color-accent-soft: #221f3d;
-  --color-accent-contrast: #0a0a0b;
+  --color-accent: #e5e7eb;
+  --color-accent-soft: #1f2937;
+  --color-accent-contrast: #0b0d0f;
   --color-primary: var(--color-accent);
   --color-success: var(--color-positive);
 
-  --color-learning: #22d3ee;
+  --color-learning: #258c7c;
   --color-learning-soft: color-mix(
     in oklab,
-    var(--color-learning) 14%,
+    var(--color-learning) 15%,
     var(--color-surface)
   );
-  --color-practice: #ff8a68;
+  --color-practice: #d96e48;
   --color-practice-soft: color-mix(
     in oklab,
-    var(--color-practice) 14%,
+    var(--color-practice) 15%,
     var(--color-surface)
   );
 
@@ -150,27 +123,27 @@
   --color-band-strong: #4ade80;
 
   --color-signal-advancing: #4ade80;
-  --color-signal-reinforcing: #9b8dff;
-  --color-signal-revisiting: #3bc9db;
-  --color-signal-remediating: #e08b3a;
-  --color-signal-challenging: #c084fc;
+  --color-signal-reinforcing: #e5e7eb;
+  --color-signal-revisiting: #258c7c;
+  --color-signal-remediating: #d96e48;
+  --color-signal-challenging: #9ca3af;
 
-  --color-positive: #4ade80;
-  --color-warning: #e08b3a;
-  --color-danger: #f87171;
+  --color-positive: #258c7c;
+  --color-warning: #d96e48;
+  --color-danger: #ef4444;
 
-  --color-achievement: #e0a72e;
+  --color-achievement: #c9a96e;
   --color-achievement-soft: color-mix(
     in oklab,
-    var(--color-achievement) 14%,
+    var(--color-achievement) 15%,
     var(--color-surface)
   );
 
-  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.3);
-  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.4);
-  --shadow-md: 0 4px 16px -2px rgb(0 0 0 / 0.5);
-  --shadow-lg: 0 20px 56px -12px rgb(0 0 0 / 0.6);
-  --shadow-hero: 0 28px 72px -16px rgb(0 0 0 / 0.7);
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.5);
+  --shadow-md: 0 4px 16px -2px rgb(0 0 0 / 0.6);
+  --shadow-lg: 0 20px 56px -12px rgb(0 0 0 / 0.7);
+  --shadow-hero: 0 28px 72px -16px rgb(0 0 0 / 0.8);
 }
 
 @layer base {
@@ -197,14 +170,15 @@
   :focus-visible {
     outline: 2px solid var(--color-accent);
     outline-offset: 2px;
-    border-radius: 3px;
+    border-radius: 2px;
   }
 
   h1,
   h2,
   h3,
   h4 {
-    letter-spacing: -0.02em;
+    font-family: var(--font-editorial);
+    letter-spacing: -0.01em;
     text-wrap: balance;
   }
 
@@ -254,20 +228,7 @@
   }
 }
 
-/* Milestone 20 — the ONE hero surface's background geometry. Two extremely
-   low-opacity radial fields (identity indigo + learning teal), never a full
-   gradient wash, never glassmorphism (no blur/opacity on foreground content).
-   Used only by `Panel` variant="hero". */
 .lumen-hero-field {
-  background-image:
-    radial-gradient(
-      120% 140% at 100% 0%,
-      color-mix(in oklab, var(--color-accent) 10%, transparent),
-      transparent 60%
-    ),
-    radial-gradient(
-      100% 120% at 0% 100%,
-      color-mix(in oklab, var(--color-learning) 7%, transparent),
-      transparent 55%
-    );
+  /* Disabled gradient hero field for clean editorial aesthetic */
+  background: transparent;
 }

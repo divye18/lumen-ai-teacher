@@ -33,8 +33,6 @@ export function Badge({
       "text-[var(--color-warning)] border-[color-mix(in_oklab,var(--color-warning)_30%,transparent)] bg-[color-mix(in_oklab,var(--color-warning)_10%,transparent)]",
     danger:
       "text-[var(--color-danger)] border-[color-mix(in_oklab,var(--color-danger)_30%,transparent)] bg-[color-mix(in_oklab,var(--color-danger)_10%,transparent)]",
-    // Milestone 19.1 — mode-identity tones. Same shape as the existing
-    // tones (tinted border + soft background), never a solid fill.
     learning:
       "text-[var(--color-learning)] border-[color-mix(in_oklab,var(--color-learning)_30%,transparent)] bg-[var(--color-learning-soft)]",
     practice:
@@ -43,7 +41,7 @@ export function Badge({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium tracking-tight",
+        "inline-flex items-center gap-1.5 rounded-[var(--radius-xs)] border px-1.5 py-0.5 text-[11px] font-semibold tracking-tight uppercase",
         tones[tone],
         className,
       )}
