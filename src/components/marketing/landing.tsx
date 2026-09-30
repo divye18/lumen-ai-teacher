@@ -160,10 +160,24 @@ export function Landing({ signedIn }: { signedIn: boolean }) {
       <footer className="mx-auto w-full max-w-5xl px-5 py-8 sm:px-8">
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--color-border)] pt-6 text-[12px] text-[var(--color-ink-faint)]">
           <LumenWordmark size="sm" />
-          <span>
+          <span className="flex-1 text-center sm:text-left">
             Built on grounded RAG, a persistent learner model, and an adaptive
             teaching engine.
           </span>
+          <nav className="flex gap-4">
+            <Link
+              href="/privacy"
+              className="transition-colors hover:text-[var(--color-ink)]"
+            >
+              Privacy
+            </Link>
+            <Link
+              href="/terms"
+              className="transition-colors hover:text-[var(--color-ink)]"
+            >
+              Terms
+            </Link>
+          </nav>
         </div>
       </footer>
     </div>

@@ -16,7 +16,10 @@ const lora = Lora({
   display: "swap",
 });
 
+import { publicConfig } from "@/config/public";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(publicConfig.appUrl),
   title: {
     default: "Lumen — Understand it",
     template: "%s · Lumen",
