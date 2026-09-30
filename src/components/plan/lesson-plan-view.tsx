@@ -164,7 +164,7 @@ export function LessonPlanView({
       ) : null}
 
       <div className="sticky bottom-4 z-10">
-        <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[color-mix(in_oklab,var(--color-surface)_92%,transparent)] p-3 shadow-[var(--shadow-md)] backdrop-blur-md">
+        <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 shadow-[var(--shadow-md)]">
           <Button
             onClick={start}
             loading={starting}

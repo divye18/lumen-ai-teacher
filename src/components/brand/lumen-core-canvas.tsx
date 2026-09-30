@@ -37,9 +37,9 @@ function CoreGeometry({
       let outerY = 0.05;
       let outerX = 0.02;
       let innerY = -0.08;
-      let innerZ = 0.03;
+      const innerZ = 0.03;
 
-      if (state === "THINKING" || state === "EVALUATING" as any) {
+      if (state === "THINKING" ) {
          outerY = 0.01;
          innerY = -0.02;
       } else if (state === "MISCONCEPTION") {
