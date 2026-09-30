@@ -61,16 +61,16 @@ export default async function StudioPage() {
           </h2>
           
           <h1 className="font-editorial text-5xl leading-[1.05] font-medium tracking-tight text-[var(--color-ink)] sm:text-7xl">
-            {curriculumHome.continueLearning ? curriculumHome.continueLearning.topicTitle : "Begin your exploration."}
+            {overview.activeSession ? overview.activeSession.lessonTitle : (curriculumHome.continueLearning ? curriculumHome.continueLearning.topicTitle : "Begin your exploration.")}
           </h1>
 
           <p className="mt-6 font-mono text-[13px] text-[var(--color-ink-muted)] uppercase tracking-widest">
-            {curriculumHome.continueLearning?.chapterTitle || "Select a subject to begin learning."}
+            {overview.activeSession ? "In Progress" : curriculumHome.continueLearning?.chapterTitle || "Select a subject to begin learning."}
           </p>
           
           <div className="mt-12 flex gap-4">
-             {curriculumHome.continueLearning ? (
-               <LinkButton href={`/learn/${curriculumHome.continueLearning.sessionId}`} size="lg" variant="secondary" className="border-transparent bg-white text-[var(--color-canvas)] hover:bg-white/90 rounded-none px-12 py-6 text-[15px]">
+             {overview.activeSession || curriculumHome.continueLearning ? (
+               <LinkButton href={`/learn/${overview.activeSession ? overview.activeSession.sessionId : curriculumHome.continueLearning?.sessionId}`} size="lg" variant="secondary" className="border-transparent bg-white text-[var(--color-canvas)] hover:bg-white/90 rounded-none px-12 py-6 text-[15px]">
                  Continue Learning
                </LinkButton>
              ) : (
