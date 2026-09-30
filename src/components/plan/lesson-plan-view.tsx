@@ -12,6 +12,8 @@ import { SourceCitations } from "@/components/teaching/source-citations";
 import { apiFetch } from "@/lib/ui/api-client";
 import type { LessonView } from "@/lib/session/views";
 
+import { LumenCore } from "@/components/brand/lumen-core";
+
 interface StartResponse {
   ok: true;
   session: { sessionId: string };
@@ -56,6 +58,9 @@ export function LessonPlanView({
 
   return (
     <div className="flex flex-col gap-6">
+      <div className="flex justify-center pt-8 pb-4">
+        <LumenCore size="medium" intensity="subtle" interactive={true} />
+      </div>
       <Panel inset>
         <div className="flex flex-wrap items-center gap-2">
           <Badge tone="accent" dot>

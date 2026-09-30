@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { LinkButton } from "@/components/ui/button";
 import { MasteryMeter } from "@/components/ui/mastery-meter";
 import { LumenMark } from "@/components/ui/lumen-mark";
+import { LumenCore } from "@/components/brand/lumen-core";
 import { KnowledgeGraphPanel } from "@/components/graph/knowledge-graph-panel";
 import { MasteryTrajectoryChart } from "@/components/learning/mastery-trajectory";
 import type { SessionReport } from "@/lib/studio/session-report";
@@ -61,6 +62,9 @@ export function SessionCompleteView({ report }: { report: SessionReport }) {
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6">
+      <div className="flex justify-center pt-8 pb-2">
+        <LumenCore size="medium" intensity="focus" interactive={false} />
+      </div>
       <motion.header
         initial={reduce ? false : { opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}

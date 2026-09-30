@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { LumenMark } from "@/components/ui/lumen-mark";
+import { LumenCore } from "@/components/brand/lumen-core";
 import { Panel, SectionHeading } from "@/components/ui/surface";
 import type { StoredDiagnosticConceptRef } from "@/lib/session/diagnostic-flow";
 import type { DiagnosticSummaryView } from "@/lib/session/diagnostic-summary";
@@ -55,8 +55,8 @@ export function DiagnosticSummaryPanel({
 
   return (
     <Panel inset>
-      <div className="flex items-center gap-2 text-[var(--color-accent)]">
-        <LumenMark className="size-4" />
+      <div className="flex items-center gap-3 text-[var(--color-accent)]">
+        <LumenCore size="small" intensity="focus" interactive={false} />
         <span className="text-[11px] font-semibold tracking-wide uppercase">
           Diagnostic summary
         </span>
