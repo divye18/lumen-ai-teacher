@@ -58,7 +58,7 @@ import type {
 } from "@/lib/session/views";
 import { cn } from "@/lib/ui/cn";
 
-import { LumenCore } from "@/components/brand/lumen-core";
+import { LumenCore, type LumenCoreState } from "@/components/brand/lumen-core";
 import { Button } from "@/components/ui/button";
 type Phase =
   "loading" | "teaching" | "question" | "result" | "complete" | "error";
@@ -531,7 +531,7 @@ export function TeachingRoom({
   } else if (phase === "teaching") {
     coreState = step?.decision.action === "SIMPLIFY" || step?.decision.action === "HINT" ? "RETEACHING" : "TEACHING";
   } else if (phase === "question") {
-    coreState = voiceEnabled && listenTargetRef.current === "question" && !voiceAnswer ? "LISTENING" : "IDLE";
+    coreState = voiceEnabled && voice.state === "LISTENING" && !voiceAnswer ? "LISTENING" : "IDLE";
   } else if (phase === "result") {
     if (busy) coreState = "THINKING";
     else if (result?.evaluation?.misconception) coreState = "MISCONCEPTION";
@@ -562,14 +562,14 @@ export function TeachingRoom({
           <div className="w-full max-w-lg aspect-square">
             <VisualCanvas
               directive={activeVisual}
-              intentLabel={visualIntentText ? visualIntentLabel(visualIntentText as any) : null}
+              intentLabel={visualIntentText ? visualIntentLabel(visualIntentText as VisualIntent) : null}
               muted={visualMuted}
               className="border-none bg-transparent"
             />
           </div>
         ) : (
           <div className="w-[60vw] max-w-[500px] aspect-square">
-            <LumenCore size="hero" state={coreState as any} />
+            <LumenCore size="hero" state={coreState as LumenCoreState} />
           </div>
         )}
       </div>
@@ -701,31 +701,9 @@ const PRESENCE_STATUS_LABEL: Record<string, string> = {
   IDLE: "Ready",
 };
 
-function presenceStatusLabel(presence: string, phase: Phase): string {
-  if (phase === "complete") return "Done";
-  return PRESENCE_STATUS_LABEL[presence] ?? "Ready";
-}
 
-function ConceptEyebrow({
-  title,
-  action,
-  label = "Current concept",
-}: {
-  title: string;
-  action: string;
-  label?: string;
-}) {
-  return (
-    <div className="mb-4">
-      <p className="text-[10px] font-semibold tracking-wider text-[var(--color-ink-faint)] uppercase">
-        {label} · {actionLabel(action)}
-      </p>
-      <p className="mt-1 text-[13px] font-medium text-[var(--color-ink-muted)] capitalize">
-        {title.replace(/-/g, " ")}
-      </p>
-    </div>
-  );
-}
+
+
 
 function TeachingTopBar({
   conceptLabel,
@@ -753,8 +731,8 @@ function TeachingTopBar({
   const mm = Math.floor(elapsedSec / 60);
   const ss = elapsedSec % 60;
   return (
-    <header className="sticky top-0 z-30 border-b border-[var(--color-border)] bg-[color-mix(in_oklab,var(--color-canvas)_88%,transparent)] backdrop-blur-md">
-      <div className="mx-auto flex h-14 max-w-7xl items-center gap-3 px-4 sm:px-6">
+    <header className="sticky top-0 z-30 border-b border-[var(--color-border)] bg-[var(--color-canvas)]">
+      <div className="mx-auto flex min-h-[56px] py-2 flex-wrap max-w-7xl items-center gap-3 px-4 sm:px-6">
         <Link href="/studio" aria-label="Exit to studio">
           <LumenWordmark />
         </Link>
